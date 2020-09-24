@@ -23,8 +23,7 @@ export default class GitHelper {
   async collect(oid, mapping) {
     this.debug("collecting", oid);
 
-    const cid = this.helper.ipld.shaToCid(oid);
-    if (mapping[cid]) return mapping;
+    if (mapping[oid]) return mapping;
 
     const node = await this.load(oid);
 
@@ -59,32 +58,32 @@ export default class GitHelper {
 
     if (await this.exists(oid)) return;
 
-    const cid = this.helper.ipld.shaToCid(oid);
-    const node = await this.helper.ipld.get(cid);
+    // const cid = this.helper.ipld.shaToCid(oid);
+    // const node = await this.helper.ipld.get(cid);
 
-    if (node.gitType === "commit") {
-      // node is a commit
-      await this.download(this.helper.ipld.cidToSha(node.tree["/"]));
+    // if (node.gitType === "commit") {
+    //   // node is a commit
+    //   await this.download(this.helper.ipld.cidToSha(node.tree["/"]));
 
-      for (const parent of node.parents) {
-        await this.download(this.helper.ipld.cidToSha(parent["/"]));
-      }
+    //   for (const parent of node.parents) {
+    //     await this.download(this.helper.ipld.cidToSha(parent["/"]));
+    //   }
 
-      await this.dump(oid, node);
-    } else if (Buffer.isBuffer(node)) {
-      // node is a blob
-      await this.dump(oid, node);
-    } else {
-      // node is a tree
-      // tslint:disable-next-line:forin
-      for (const entry in node) {
-        await this.download(
-          await this.helper.ipld.cidToSha(node[entry].hash["/"])
-        );
-      }
+    //   await this.dump(oid, node);
+    // } else if (Buffer.isBuffer(node)) {
+    //   // node is a blob
+    //   await this.dump(oid, node);
+    // } else {
+    //   // node is a tree
+    //   // tslint:disable-next-line:forin
+    //   for (const entry in node) {
+    //     await this.download(
+    //       await this.helper.ipld.cidToSha(node[entry].hash["/"])
+    //     );
+    //   }
 
-      await this.dump(oid, node);
-    }
+    //   await this.dump(oid, node);
+    // }
   }
 
   /***** fs-related methods *****/

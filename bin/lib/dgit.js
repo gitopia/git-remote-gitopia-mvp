@@ -8,7 +8,6 @@ import URL from "url-parse";
 export default class DGitHelper {
   // OK
   constructor(helper) {
-    const url = new URL(helper.config.gateway);
     this.helper = helper;
   }
 

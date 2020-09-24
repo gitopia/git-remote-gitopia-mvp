@@ -9,6 +9,8 @@ import shell from "shelljs";
 import GitHelper from "./lib/git.js";
 import DGitHelper from "./lib/dgit.js";
 import LineHelper from "./lib/line.js";
+import Arweave from "arweave";
+import { getRefsOnArweave } from "./lib/arweave.js";
 
 const _timeout = async (duration) => {
   return new Promise((resolve, reject) => {
@@ -58,17 +60,20 @@ export default class Helper {
   // OK
   async initialize() {
     // create dirs
-    fs.ensureDirSync(path.join(this.path, "refs", "remotes", this.name));
-    fs.ensureDirSync(path.join(this.path, "dgit", "refs"));
-    // load db
-    this._db = Level(path.join(this.path, "dgit", "refs", this.address));
+    // fs.ensureDirSync(path.join(this.path, "refs", "remotes", this.name));
+    // fs.ensureDirSync(path.join(this.path, "dgit", "refs"));
+    this._arweave = Arweave.init({
+      host: "arweave.net",
+      port: 443,
+      protocol: "https",
+    });
   }
 
   // OK
   async run() {
     while (true) {
       const cmd = await this.line.next();
-      console.log(cmd);
+
       switch (this._cmd(cmd)) {
         case "capabilities":
           await this._handleCapabilities();
@@ -77,7 +82,7 @@ export default class Helper {
           await this._handleList({ forPush: true });
           break;
         case "list":
-          await this._handleList();
+          await this._handleList({});
           break;
         case "fetch":
           await this._handleFetch(cmd);
@@ -112,7 +117,7 @@ export default class Helper {
 
     // tslint:disable-next-line:forin
     for (const ref in refs) {
-      this._send(this.dgit.cidToSha(refs[ref]) + " " + ref);
+      this._send(refs[ref] + " " + ref);
     }
 
     // force HEAD to master and update once dgit handle symbolic refs
@@ -160,53 +165,22 @@ export default class Helper {
 
   // OK
   async _fetchRefs() {
-    this.debug("fetching remote refs from chain");
+    this.debug("fetching remote refs from arweave");
 
     let start;
     let block;
     let events;
     const ops = [];
-    const updates = {};
-    const spinner = ora(
-      "Fetching remote refs from chain [this may take a while]"
-    ).start();
+    const spinner = ora("Fetching remote refs from arweave").start();
 
     try {
-      start = await this._db.get("@block");
+      const refs = await getRefsOnArweave(this._arweave, this.url);
+
+      spinner.succeed("Remote refs fetched from arweave");
+
+      return Object.fromEntries(refs);
     } catch (err) {
-      if (err.message === "Key not found in database [@block]") {
-        start = 0;
-      } else {
-        throw err;
-      }
-    }
-
-    try {
-      // get refs from dgit node
-      //   events = await this._repo.contract.getPastEvents("UpdateRef", {
-      //     fromBlock: start,
-      //     toBlock: "latest",
-      //   });
-      events = [{ ref: "", hash: "" }];
-
-      for (const event of events) {
-        updates[event.ref] = event.hash;
-      }
-
-      // tslint:disable-next-line:forin
-      for (const ref in updates) {
-        ops.push({ type: "put", key: ref, value: updates[ref] });
-      }
-
-      ops.push({ type: "put", key: "@block", value: block });
-
-      await this._db.batch(ops);
-
-      spinner.succeed("Remote refs fetched from chain");
-
-      return this._getRefs();
-    } catch (err) {
-      spinner.fail("Failed to fetch remote refs from chain");
+      spinner.fail("Failed to fetch remote refs from arweave");
       throw err;
     }
   }
@@ -214,7 +188,6 @@ export default class Helper {
   // OK
   async _getRefs() {
     this.debug("reading refs from local db");
-
     const refs = {};
 
     return new ((resolve, reject) => {
@@ -256,21 +229,23 @@ export default class Helper {
       const pins = [];
 
       try {
-        const refs = await this._getRefs();
+        const refs = await this._fetchRefs();
         const remote = refs[dst];
 
         const srcBranch = src.split("/").pop();
         const dstBranch = dst.split("/").pop();
 
         const revListCmd = remote
-          ? `git rev-list --left-only ${srcBranch}...${this.name}/${dstBranch}`
-          : "git rev-list --all";
+          ? `git rev-list --objects --left-only ${srcBranch}...${this.name}/${dstBranch}`
+          : "git rev-list --objects --all";
 
         const commits = shell
           .exec(revListCmd, { silent: true })
-          .stdout.split("\n")
-          .slice(0, -1);
+          .stdout.split("\n");
 
+        // .slice(0, -1);
+        this.debug(commits);
+        this._die();
         // checking permissions
         try {
           spinner = ora(`Checking permissions over ${this.address}`).start();
@@ -313,7 +288,7 @@ export default class Helper {
             mapping = { ...mapping, ..._mapping };
           }
 
-          head = this.dgit.shaToCid(commits[0]);
+          head = commits[0];
 
           // tslint:disable-next-line:forin
           for (const entry in mapping) {
@@ -333,20 +308,6 @@ export default class Helper {
           spinner.succeed("Git objects uploaded to IPFS");
         } catch (err) {
           spinner.fail("Failed to upload git objects to IPFS: " + err.message);
-          this._die();
-        }
-
-        // pin git objects
-        try {
-          // tslint:disable-next-line:forin
-          for (const entry in mapping) {
-            pins.push(this.dgit.pin(entry));
-          }
-          spinner = ora("Pinning git objects to IPFS").start();
-          await Promise.all(pins);
-          spinner.succeed("Git objects pinned to IPFS");
-        } catch (err) {
-          spinner.fail("Failed to pin git objects to IPFS: " + err.message);
           this._die();
         }
 
@@ -390,7 +351,6 @@ export default class Helper {
 
   // OK
   _cmd(line) {
-    console.log(line);
     if (line === "capabilities") {
       return "capabilities";
     } else if (line === "list for-push") {

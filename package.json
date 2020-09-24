@@ -13,6 +13,7 @@
   },
   "type": "module",
   "dependencies": {
+    "arweave": "^1.9.1",
     "cids": "^0.5.7",
     "debug": "^4.1.1",
     "fs-extra": "^7.0.1",
@@ -23,6 +24,7 @@
     "shelljs": "^0.8.3",
     "simple-git": "^1.107.0",
     "smart-buffer": "^4.0.2",
+    "smartweave": "^0.3.6",
     "url-parse": "^1.4.4",
     "zlib": "^1.0.5"
   }
