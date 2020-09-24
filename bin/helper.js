@@ -177,7 +177,6 @@ export default class Helper {
       const refs = await getRefsOnArweave(this._arweave, this.url);
 
       spinner.succeed("Remote refs fetched from arweave");
-
       return Object.fromEntries(refs);
     } catch (err) {
       spinner.fail("Failed to fetch remote refs from arweave");
@@ -220,7 +219,7 @@ export default class Helper {
   async _push(src, dst) {
     this.debug("pushing", src, "to", dst);
 
-    return new (async (resolve, reject) => {
+    return (async (resolve, reject) => {
       let spinner;
       let head;
       let txHash;
@@ -239,13 +238,12 @@ export default class Helper {
           ? `git rev-list --objects --left-only ${srcBranch}...${this.name}/${dstBranch}`
           : "git rev-list --objects --all";
 
-        const commits = shell
+        const objects = shell
           .exec(revListCmd, { silent: true })
-          .stdout.split("\n");
-
-        // .slice(0, -1);
-        this.debug(commits);
-        this._die();
+          .stdout.split("\n")
+          .slice(0, -1)
+          .map((object) => object.substr(0, 40));
+        console.error(objects);
         // checking permissions
         try {
           spinner = ora(`Checking permissions over ${this.address}`).start();
