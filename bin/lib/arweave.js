@@ -47,9 +47,10 @@ export async function updateRef(arweave, wallet, remoteURI, name, ref) {
   let tx = await arweave.createTransaction({ data: ref }, wallet);
   tx = addTransactionTags(tx, repoName, "update-ref");
   tx.addTag("ref", name);
+  tx.addTag("Content-Type", "text/plain");
 
   await arweave.transactions.sign(tx, wallet); // Sign transaction
-  arweave.transactions.post(tx); // Post transaction
+  return arweave.transactions.post(tx); // Post transaction
 }
 
 export async function getRef(arweave, remoteURI, name) {
@@ -104,9 +105,9 @@ export async function pushGitObject(arweave, wallet, remoteURI, oid, object) {
 
   while (!uploader.isComplete) {
     await uploader.uploadChunk();
-    console.error(
-      `${uploader.pctComplete}% complete, ${uploader.uploadedChunks}/${uploader.totalChunks}`
-    );
+    // console.error(
+    //   `${uploader.pctComplete}% complete, ${uploader.uploadedChunks}/${uploader.totalChunks}`
+    // );
   }
 }
 
