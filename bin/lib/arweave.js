@@ -114,11 +114,7 @@ export async function fetchGitObjects(arweave, remoteURI) {
   const query = {
     op: "and",
     expr1: repoQuery(remoteURI),
-    expr2: {
-      op: "and",
-      expr1: { op: "equals", expr1: "oid", expr2: oid },
-      expr2: { op: "equals", expr1: "Type", expr2: "push-git-object" },
-    },
+    expr2: { op: "equals", expr1: "Type", expr2: "push-git-object" },
   };
   const txids = await arweave.arql(query);
   const objects = await Promise.all(

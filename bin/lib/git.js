@@ -71,9 +71,7 @@ export default class GitHelper {
     raw.writeUInt8(0);
     raw.writeBuffer(data);
 
-    const path = await this.path(oid + "0");
-    await fs.ensureFile(path);
-    fs.writeFileSync(path, zlib.deflateSync(raw.toBuffer()));
+    return zlib.deflateSync(raw.toBuffer());
   }
 
   // OK

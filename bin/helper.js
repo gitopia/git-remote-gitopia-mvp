@@ -225,7 +225,7 @@ export default class Helper {
 
   // OK
   async _fetch(oid, ref) {
-    this.debug("fetching", ref, oid, this.dgit.shaToCid(oid));
+    this.debug("fetching", ref, oid);
     await this.git.download(oid);
   }
 
