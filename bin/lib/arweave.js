@@ -36,7 +36,6 @@ export function parseArgitRemoteURI(remoteURI) {
 function addTransactionTags(tx, repo, txType) {
   tx.addTag("Repo", repo);
   tx.addTag("Type", txType);
-  // tx.addTag("Content-Type", "application/json");
   tx.addTag("App-Name", "dgit");
   tx.addTag("version", "0.0.1");
   tx.addTag("Unix-Time", Math.round(new Date().getTime() / 1000)); // Add Unix timestamp
@@ -92,38 +91,37 @@ export async function getRef(arweave, remoteURI, name) {
   return tx_rows[0].oid;
 }
 
-export async function pushGitObject(arweave, wallet, remoteURI, oid, type) {
+export async function pushGitObject(arweave, wallet, remoteURI, oid, object) {
   const { repoName } = parseArgitRemoteURI(remoteURI);
 
-  let tx = await arweave.createTransaction({ data: packfile.packfile }, wallet);
-  tx = addTransactionTags(tx, repoName, "send-pack");
+  let tx = await arweave.createTransaction({ data: object }, wallet);
+  tx = addTransactionTags(tx, repoName, "push-git-object");
   tx.addTag("oid", oid);
-  tx.addTag("oldoid", oldoid);
-  tx.addTag("filename", packfile.filename);
+  tx.addTag("Content-Type", "application/octet-stream");
 
   await arweave.transactions.sign(tx, wallet);
   let uploader = await arweave.transactions.getUploader(tx);
 
   while (!uploader.isComplete) {
     await uploader.uploadChunk();
-    console.log(
+    console.error(
       `${uploader.pctComplete}% complete, ${uploader.uploadedChunks}/${uploader.totalChunks}`
     );
   }
+}
 
-  // Send fee to PST holders
-  const contractState = await smartweave.readContract(arweave, contractId);
-  const holder = smartweave.selectWeightedPstHolder(contractState.balances);
-  // send a fee. You should inform the user about this fee and amount.
-  const pstTx = await arweave.createTransaction(
-    { target: holder, quantity: arweave.ar.arToWinston("0.01") },
-    wallet
-  );
-  pstTx.addTag("App-Name", "dgit");
-  pstTx.addTag("version", "0.0.1");
-
-  await arweave.transactions.sign(pstTx, wallet);
-  await arweave.transactions.post(pstTx);
+export async function fetchGitObject(arweave, remoteURI, oid) {
+  const query = {
+    op: "and",
+    expr1: repoQuery(remoteURI),
+    expr2: {
+      op: "and",
+      expr1: { op: "equals", expr1: "oid", expr2: oid },
+      expr2: { op: "equals", expr1: "Type", expr2: "push-git-object" },
+    },
+  };
+  const txids = await arweave.arql(query);
+  return await arweave.transactions.getData(txids[0], { decode: true });
 }
 
 export async function pushPackfile(

@@ -10,7 +10,7 @@ import GitHelper from "./lib/git.js";
 import DGitHelper from "./lib/dgit.js";
 import LineHelper from "./lib/line.js";
 import Arweave from "arweave";
-import { getRefsOnArweave } from "./lib/arweave.js";
+import { getRefsOnArweave, pushGitObject, updateRef } from "./lib/arweave.js";
 
 const _timeout = async (duration) => {
   return new Promise((resolve, reject) => {
@@ -48,6 +48,7 @@ export default class Helper {
     // address and path shortcuts
     this.address = this.url.split("://")[1];
     this.path = path.resolve(process.env.GIT_DIR || "");
+    this.arweaveWalletPath = process.env.ARWEAVE_WALLET_PATH;
     // config
     this.config = this._config();
     // lib
@@ -143,6 +144,14 @@ export default class Helper {
   // OK
   async _handlePush(line) {
     this.debug("cmd", line);
+
+    if (!this.arweaveWalletPath) {
+      console.error("Missing ARWEAVE_WALLET_PATH env variable");
+      this._die();
+    }
+
+    const rawdata = fs.readFileSync(this.arweaveWalletPath);
+    this.wallet = JSON.parse(rawdata);
 
     while (true) {
       const [src, dst] = line.split(" ")[1].split(":");
@@ -243,7 +252,7 @@ export default class Helper {
           .stdout.split("\n")
           .slice(0, -1)
           .map((object) => object.substr(0, 40));
-        console.error(objects);
+
         // checking permissions
         try {
           spinner = ora(`Checking permissions over ${this.address}`).start();
@@ -281,17 +290,15 @@ export default class Helper {
             "Collecting git objects [this may take a while]"
           ).start();
 
-          for (const commit of commits) {
-            const _mapping = await this.git.collect(commit, mapping);
-            mapping = { ...mapping, ..._mapping };
+          for (const oid of objects) {
+            const object = await this.git.load(oid);
+            // Check object already exists on arweave before pushing
+            puts.push(
+              pushGitObject(this._arweave, this.wallet, this.url, oid, object)
+            );
           }
 
-          head = commits[0];
-
-          // tslint:disable-next-line:forin
-          for (const entry in mapping) {
-            puts.push(this.dgit.put(mapping[entry]));
-          }
+          head = objects[0];
 
           spinner.succeed("Git objects collected");
         } catch (err) {
@@ -301,20 +308,23 @@ export default class Helper {
 
         // upload git objects
         try {
-          spinner = ora("Uploading git objects to IPFS").start();
+          spinner = ora("Uploading git objects to arweave").start();
           await Promise.all(puts);
-          spinner.succeed("Git objects uploaded to IPFS");
+          spinner.succeed("Git objects uploaded to arweave");
         } catch (err) {
-          spinner.fail("Failed to upload git objects to IPFS: " + err.message);
+          spinner.fail(
+            "Failed to upload git objects to arweave: " + err.message
+          );
           this._die();
         }
 
         // register on chain
         try {
-          spinner = ora(`Registering ref ${dst} ${head} on-chain`).start();
+          spinner = ora(`Updating ref ${dst} ${head} on arweave`).start();
+          await updateRef(this._arweave, this.wallet, this.url, dst, head);
         } catch (err) {
           spinner.fail(
-            `Failed to register ref ${dst} ${head} on-chain: ` + err.message
+            `Failed to update ref ${dst} ${head} on arweave: ` + err.message
           );
           this._die();
         }

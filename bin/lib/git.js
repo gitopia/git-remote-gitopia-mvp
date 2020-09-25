@@ -4,9 +4,8 @@ import npath from "path";
 import shell from "shelljs";
 // tslint:disable-next-line:no-submodule-imports
 import gitP from "simple-git/promise.js";
-import pkg from "smart-buffer";
-const { SmartBuffer } = pkg;
-import zlib from "zlib";
+
+import { fetchGitObject } from "./arweave.js";
 
 const git = gitP();
 
@@ -20,36 +19,8 @@ export default class GitHelper {
   /***** core methods *****/
 
   // OK
-  async collect(oid, mapping) {
+  async collect(oid) {
     this.debug("collecting", oid);
-
-    if (mapping[oid]) return mapping;
-
-    const node = await this.load(oid);
-
-    if (node.gitType === "commit") {
-      // node is a commit
-      const _mapping = await this.collect(
-        this.helper.ipld.cidToSha(node.tree["/"]),
-        mapping
-      );
-      return { ...mapping, ..._mapping, ...{ [cid]: node } };
-    } else if (Buffer.isBuffer(node)) {
-      // node is a blob
-      return { ...mapping, ...{ [cid]: node } };
-    } else {
-      // node is a tree
-      // tslint:disable-next-line:forin
-      for (const entry in node) {
-        const _mapping = await this.collect(
-          this.helper.ipld.cidToSha(node[entry].hash["/"]),
-          mapping
-        );
-        mapping = { ...mapping, ..._mapping };
-      }
-
-      return { ...mapping, ...{ [cid]: node } };
-    }
   }
 
   // OK
@@ -58,32 +29,16 @@ export default class GitHelper {
 
     if (await this.exists(oid)) return;
 
-    // const cid = this.helper.ipld.shaToCid(oid);
-    // const node = await this.helper.ipld.get(cid);
+    const object = await fetchGitObject(
+      this.helper._arweave,
+      this.helper.url,
+      oid
+    );
 
-    // if (node.gitType === "commit") {
-    //   // node is a commit
-    //   await this.download(this.helper.ipld.cidToSha(node.tree["/"]));
+    await this.dump(oid, object);
 
-    //   for (const parent of node.parents) {
-    //     await this.download(this.helper.ipld.cidToSha(parent["/"]));
-    //   }
-
-    //   await this.dump(oid, node);
-    // } else if (Buffer.isBuffer(node)) {
-    //   // node is a blob
-    //   await this.dump(oid, node);
-    // } else {
-    //   // node is a tree
-    //   // tslint:disable-next-line:forin
-    //   for (const entry in node) {
-    //     await this.download(
-    //       await this.helper.ipld.cidToSha(node[entry].hash["/"])
-    //     );
-    //   }
-
-    //   await this.dump(oid, node);
-    // }
+    // if commit expand the tree
+    console.error(git.catFile([oid]));
   }
 
   /***** fs-related methods *****/
@@ -97,29 +52,16 @@ export default class GitHelper {
 
   // OK
   async load(oid) {
-    const type = shell
-      .exec(`git cat-file -t ${oid}`, { silent: true })
-      .stdout.trim();
-    const size = shell
-      .exec(`git cat-file -s ${oid}`, { silent: true })
-      .stdout.trim();
-    const data = await git.binaryCatFile([type, oid]);
-
-    const raw = new SmartBuffer();
-    raw.writeString(`${type} `);
-    raw.writeString(size);
-    raw.writeUInt8(0);
-    raw.writeBuffer(data);
-
-    return this.helper.ipld.deserialize(raw.toBuffer());
+    const path = await this.path(oid);
+    await fs.ensureFile(path);
+    return fs.readFileSync(path);
   }
 
   // OK
-  async dump(oid, node) {
+  async dump(oid, object) {
     const path = await this.path(oid);
-    const buffer = await this.helper.ipld.serialize(node);
     await fs.ensureFile(path);
-    fs.writeFileSync(path, zlib.deflateSync(buffer));
+    fs.writeFileSync(path, object);
   }
 
   /***** utility methods *****/
