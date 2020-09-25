@@ -110,7 +110,7 @@ export async function pushGitObject(arweave, wallet, remoteURI, oid, object) {
   }
 }
 
-export async function fetchGitObject(arweave, remoteURI, oid) {
+export async function fetchGitObjects(arweave, remoteURI) {
   const query = {
     op: "and",
     expr1: repoQuery(remoteURI),
@@ -121,7 +121,20 @@ export async function fetchGitObject(arweave, remoteURI, oid) {
     },
   };
   const txids = await arweave.arql(query);
-  return await arweave.transactions.getData(txids[0], { decode: true });
+  const objects = await Promise.all(
+    txids.map(async (txid) => {
+      const tx = await arweave.transactions.get(txid);
+      let oid = "";
+      tx.get("tags").forEach((tag) => {
+        const key = tag.get("name", { decode: true, string: true });
+        const value = tag.get("value", { decode: true, string: true });
+        if (key === "oid") oid = value;
+      });
+      const data = await arweave.transactions.getData(txid, { decode: true });
+      return { data, oid };
+    })
+  );
+  return objects;
 }
 
 export async function pushPackfile(

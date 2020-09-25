@@ -4,8 +4,11 @@ import npath from "path";
 import shell from "shelljs";
 // tslint:disable-next-line:no-submodule-imports
 import gitP from "simple-git/promise.js";
+import pkg from "smart-buffer";
+const { SmartBuffer } = pkg;
+import zlib from "zlib";
 
-import { fetchGitObject } from "./arweave.js";
+import { fetchGitObjects } from "./arweave.js";
 
 const git = gitP();
 
@@ -27,18 +30,20 @@ export default class GitHelper {
   async download(oid) {
     this.debug("downloading", oid);
 
+    const dumps = [];
+
     if (await this.exists(oid)) return;
 
-    const object = await fetchGitObject(
+    const objects = await fetchGitObjects(
       this.helper._arweave,
-      this.helper.url,
-      oid
+      this.helper.url
     );
 
-    await this.dump(oid, object);
+    for (const object of objects) {
+      dumps.push(this.dump(object.oid, object.data));
+    }
 
-    // if commit expand the tree
-    console.error(git.catFile([oid]));
+    await Promise.all(dumps);
   }
 
   /***** fs-related methods *****/
@@ -52,9 +57,23 @@ export default class GitHelper {
 
   // OK
   async load(oid) {
-    const path = await this.path(oid);
+    const type = shell
+      .exec(`git cat-file -t ${oid}`, { silent: true })
+      .stdout.trim();
+    const size = shell
+      .exec(`git cat-file -s ${oid}`, { silent: true })
+      .stdout.trim();
+    const data = await git.binaryCatFile([type, oid]);
+
+    const raw = new SmartBuffer();
+    raw.writeString(`${type} `);
+    raw.writeString(size);
+    raw.writeUInt8(0);
+    raw.writeBuffer(data);
+
+    const path = await this.path(oid + "0");
     await fs.ensureFile(path);
-    return fs.readFileSync(path);
+    fs.writeFileSync(path, zlib.deflateSync(raw.toBuffer()));
   }
 
   // OK
