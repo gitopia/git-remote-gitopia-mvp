@@ -10,7 +10,12 @@ import GitHelper from "./lib/git.js";
 import DGitHelper from "./lib/dgit.js";
 import LineHelper from "./lib/line.js";
 import Arweave from "arweave";
-import { getRefsOnArweave, pushGitObject, updateRef } from "./lib/arweave.js";
+import {
+  getRefsOnArweave,
+  pushGitObject,
+  updateRef,
+  parseArgitRemoteURI,
+} from "./lib/arweave.js";
 
 const _timeout = async (duration) => {
   return new Promise((resolve, reject) => {
@@ -256,24 +261,15 @@ export default class Helper {
         // checking permissions
         try {
           spinner = ora(`Checking permissions over ${this.address}`).start();
+          // check push permission for repo
+          const address = await this._arweave.wallets.jwkToAddress(this.wallet);
+          const { repoOwnerAddress } = parseArgitRemoteURI(this.url);
 
-          if (
-            true // check owner permission for repo
-          ) {
-            spinner.succeed(`You have open PR permission over ${this.address}`);
-          } else {
-            spinner.fail(
-              `You do not have open PR permission over ${this.address}`
-            );
-            this._die();
-          }
-          if (
-            true // check push permissions
-          ) {
+          if (address === repoOwnerAddress) {
             spinner.succeed(`You have push permission over ${this.address}`);
           } else {
             spinner.fail(
-              `You do not have push permission over ${this.address}. Try to run 'git dgit pr open' to open a push request.`
+              `You do not have push permission over ${this.address}.`
             );
             this._die();
           }
