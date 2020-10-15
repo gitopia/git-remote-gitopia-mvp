@@ -14,6 +14,7 @@
   "type": "module",
   "dependencies": {
     "arweave": "^1.9.1",
+    "arweave-data": "git+https://github.com/ArweaveTeam/arweave-data.git",
     "cids": "^0.5.7",
     "debug": "^4.1.1",
     "fs-extra": "^7.0.1",

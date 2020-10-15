@@ -17,6 +17,9 @@ import {
   parseArgitRemoteURI,
 } from "./lib/arweave.js";
 
+import * as deepHash from "../node_modules/arweave/node/lib/deephash.js";
+import ArweaveData from "../node_modules/arweave-data/pkg/dist-node/index.js";
+
 const _timeout = async (duration) => {
   return new Promise((resolve, reject) => {
     setTimeout(() => {
@@ -73,6 +76,14 @@ export default class Helper {
       port: 443,
       protocol: "https",
     });
+    const deps = {
+      utils: Arweave.utils,
+      crypto: Arweave.crypto,
+      deepHash: deepHash,
+    };
+    console.error(ArweaveData.default);
+    this.ArData = ArweaveData.default(deps);
+    console.error(this.ArData);
   }
 
   // OK
