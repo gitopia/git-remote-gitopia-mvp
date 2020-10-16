@@ -1,4 +1,5 @@
 import * as smartweave from "smartweave";
+import * as utils from "arweave/node/lib/utils.js";
 
 // prettier-ignore
 const argitRemoteURIRegex = '^dgit:\/\/([a-zA-Z0-9-_]{43})\/([A-Za-z0-9_.-]*)'
@@ -110,6 +111,58 @@ export async function pushGitObject(arweave, wallet, remoteURI, oid, object) {
     // );
   }
 }
+
+export const makeDataItem = async (
+  arData,
+  wallet,
+  remoteURI,
+  oid,
+  objectBuf
+) => {
+  const { repoName } = parseArgitRemoteURI(remoteURI);
+  const data = utils.default.bufferTob64Url(objectBuf);
+  const tags = [
+    { name: "App-Name", value: "dgit" },
+    { name: "version", value: "0.0.1" },
+    { name: "Repo", value: repoName },
+    { name: "Type", value: "push-git-object" },
+    {
+      name: "Unix-Time",
+      value: Math.round(new Date().getTime() / 1000).toString(),
+    },
+    { name: "oid", value: oid },
+    { name: "Content-Type", value: "application/octet-stream" },
+  ];
+
+  const item = await arData.createData({ data, tags }, wallet);
+  return await arData.sign(item, wallet);
+};
+
+export const postBundledTransaction = async (
+  arweave,
+  arData,
+  wallet,
+  dataItems
+) => {
+  const bundle = await arData.bundleData(dataItems);
+  const data = JSON.stringify(bundle);
+  const tx = await arweave.createTransaction({ data }, wallet);
+  tx.addTag("Bundle-Format", "json");
+  tx.addTag("Bundle-Version", "1.0.0");
+  tx.addTag("Content-Type", "application/json");
+  tx.addTag("App-Name", "dgit");
+  tx.addTag("Type", "git-objects-bundle");
+
+  await arweave.transactions.sign(tx, wallet);
+  const uploader = await arweave.transactions.getUploader(tx);
+
+  while (!uploader.isComplete) {
+    await uploader.uploadChunk();
+    console.error(
+      `${uploader.pctComplete}% complete, ${uploader.uploadedChunks}/${uploader.totalChunks}`
+    );
+  }
+};
 
 export async function fetchGitObjects(arweave, remoteURI) {
   const query = {
