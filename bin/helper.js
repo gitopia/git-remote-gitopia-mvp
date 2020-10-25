@@ -20,7 +20,8 @@ import {
 import { getAllRefs } from "./lib/graphql.js";
 
 import * as deepHash from "arweave/node/lib/deepHash.js";
-import ArweaveData from "arweave-data/pkg/dist-node/index.js";
+import ArweaveBundles from "arweave-bundles";
+
 import pkg from "cli-progress";
 const { SingleBar, Presets } = pkg;
 
@@ -85,7 +86,7 @@ export default class Helper {
       crypto: Arweave.crypto,
       deepHash: deepHash.default.default,
     };
-    this.ArData = ArweaveData.default(deps);
+    this.ArData = ArweaveBundles.default(deps);
   }
 
   // OK
@@ -164,12 +165,19 @@ export default class Helper {
     this.debug("cmd", line);
 
     if (!this.arweaveWalletPath) {
-      console.error("Missing ARWEAVE_WALLET_PATH env variable");
-      this._die();
-    }
+      if (process.env.DGIT_WALLET) {
+        this.wallet = JSON.parse(process.env.DGIT_WALLET);
+      } else {
+        console.error(
+          "Missing ARWEAVE_WALLET_PATH or DGIT_WALLET env variable"
+        );
 
-    const rawdata = fs.readFileSync(this.arweaveWalletPath);
-    this.wallet = JSON.parse(rawdata);
+        this._die();
+      }
+    } else {
+      const rawdata = fs.readFileSync(this.arweaveWalletPath);
+      this.wallet = JSON.parse(rawdata);
+    }
 
     while (true) {
       const [src, dst] = line.split(" ")[1].split(":");

@@ -6,7 +6,7 @@ name: dgit-mirror
 # events but only for the master branch
 on:
   push:
-    branches: [ master ]
+    branches: [master]
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
@@ -23,11 +23,10 @@ jobs:
         with:
           node-version: 12
           registry-url: https://registry.npmjs.org/
-      - run: npm install -g @thetechtrap/git-remote-dgit@0.1.1
+      - run: npm install -g @thetechtrap/git-remote-dgit@0.1.2
       - name: Add Remote
         run: git remote add dgit dgit://7yFP2o906A3nDl5eCMtN4Ycs9m5otfRrJDAGoGKDoHk/git-remote-dgit
       - name: Push to Dgit
         run: git push dgit master
         env:
           DGIT_WALLET: ${{ secrets.DGIT_WALLET }}
-        
