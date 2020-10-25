@@ -11,11 +11,18 @@ import DGitHelper from "./lib/dgit.js";
 import LineHelper from "./lib/line.js";
 import Arweave from "arweave";
 import {
-  getRefsOnArweave,
   pushGitObject,
-  updateRef,
+  makeDataItem,
+  makeUpdateRefDataItem,
   parseArgitRemoteURI,
+  postBundledTransaction,
 } from "./lib/arweave.js";
+import { getAllRefs } from "./lib/graphql.js";
+
+import * as deepHash from "arweave/node/lib/deepHash.js";
+import ArweaveData from "arweave-data/pkg/dist-node/index.js";
+import pkg from "cli-progress";
+const { SingleBar, Presets } = pkg;
 
 const _timeout = async (duration) => {
   return new Promise((resolve, reject) => {
@@ -73,6 +80,12 @@ export default class Helper {
       port: 443,
       protocol: "https",
     });
+    const deps = {
+      utils: Arweave.utils,
+      crypto: Arweave.crypto,
+      deepHash: deepHash.default.default,
+    };
+    this.ArData = ArweaveData.default(deps);
   }
 
   // OK
@@ -120,7 +133,7 @@ export default class Helper {
     forPush ? this.debug("cmd", "list", "for-push") : this.debug("cmd, list");
 
     const refs = await this._fetchRefs();
-
+    console.error("refs", refs);
     // tslint:disable-next-line:forin
     for (const ref in refs) {
       this._send(refs[ref] + " " + ref);
@@ -188,10 +201,10 @@ export default class Helper {
     const spinner = ora("Fetching remote refs from arweave").start();
 
     try {
-      const refs = await getRefsOnArweave(this._arweave, this.url);
+      const refs = await getAllRefs(this._arweave, this.url);
 
       spinner.succeed("Remote refs fetched from arweave");
-      return Object.fromEntries(refs);
+      return refs;
     } catch (err) {
       spinner.fail("Failed to fetch remote refs from arweave");
       throw err;
@@ -235,7 +248,6 @@ export default class Helper {
 
     return (async (resolve, reject) => {
       let spinner;
-      let head;
       let txHash;
       let mapping = {};
       const puts = [];
@@ -250,7 +262,7 @@ export default class Helper {
 
         const revListCmd = remote
           ? `git rev-list --objects --left-only ${srcBranch}...${this.name}/${dstBranch}`
-          : "git rev-list --objects --all";
+          : `git rev-list --objects ${srcBranch}`;
 
         const objects = shell
           .exec(revListCmd, { silent: true })
@@ -280,21 +292,45 @@ export default class Helper {
           this._die();
         }
 
+        // update ref
+        puts.push(
+          makeUpdateRefDataItem(
+            this.ArData,
+            this.wallet,
+            this.url,
+            dst,
+            objects[0]
+          )
+        );
+
         // collect git objects
+        spinner = ora("Collecting git objects [this may take a while]").start();
+
+        const bar1 = new SingleBar(
+          { stream: process.stderr },
+          Presets.shades_classic
+        );
+
+        bar1.start(objects.length, 0);
+
         try {
-          spinner = ora(
-            "Collecting git objects [this may take a while]"
-          ).start();
-
-          for (const oid of objects) {
-            const object = await this.git.load(oid);
-            // Check object already exists on arweave before pushing
+          objects.map((oid) =>
             puts.push(
-              pushGitObject(this._arweave, this.wallet, this.url, oid, object)
-            );
-          }
+              (async (bar) => {
+                bar.increment();
 
-          head = objects[0];
+                const object = await this.git.load(oid);
+                const dataItem = await makeDataItem(
+                  this.ArData,
+                  this.wallet,
+                  this.url,
+                  oid,
+                  object
+                );
+                return dataItem;
+              })(bar1)
+            )
+          );
 
           spinner.succeed("Git objects collected");
         } catch (err) {
@@ -305,7 +341,15 @@ export default class Helper {
         // upload git objects
         try {
           spinner = ora("Uploading git objects to arweave").start();
-          await Promise.all(puts);
+          const dataItems = await Promise.all(puts);
+          bar1.stop();
+          await postBundledTransaction(
+            this._arweave,
+            this.ArData,
+            this.wallet,
+            this.url,
+            dataItems
+          );
           spinner.succeed("Git objects uploaded to arweave");
         } catch (err) {
           spinner.fail(
@@ -316,11 +360,12 @@ export default class Helper {
 
         // register on chain
         try {
-          spinner = ora(`Updating ref ${dst} ${head} on arweave`).start();
-          await updateRef(this._arweave, this.wallet, this.url, dst, head);
+          spinner = ora(`Updating ref ${dst} ${objects[0]} on arweave`).start();
+          spinner.succeed(`Updated ref ${dst} ${objects[0]} successfully`);
         } catch (err) {
           spinner.fail(
-            `Failed to update ref ${dst} ${head} on arweave: ` + err.message
+            `Failed to update ref ${dst} ${objects[0]} on arweave: ` +
+              err.message
           );
           this._die();
         }
