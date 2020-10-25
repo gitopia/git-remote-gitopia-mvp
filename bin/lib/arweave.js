@@ -140,8 +140,8 @@ export const postBundledTransaction = async (
   }
 
   // Send fee to PST holders
-  const contractState = await smartweave.readContract(arweave, contractId);
-  const holder = smartweave.selectWeightedPstHolder(contractState.balances);
+  const contractState = await smartweave.default.readContract(arweave, contractId);
+  const holder = smartweave.default.selectWeightedPstHolder(contractState.balances);
   // send a fee. You should inform the user about this fee and amount.
   const pstTx = await arweave.createTransaction(
     { target: holder, quantity: arweave.ar.arToWinston("0.01") },

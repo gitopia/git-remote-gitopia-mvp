@@ -1,6 +1,6 @@
 {
   "name": "@thetechtrap/git-remote-dgit",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "git-remote-helper for Dgit",
   "main": "bin/index.mjs",
   "bin": {
