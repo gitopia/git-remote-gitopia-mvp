@@ -1,6 +1,6 @@
 {
   "name": "@thetechtrap/git-remote-dgit",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "git-remote-helper for Dgit",
   "main": "bin/index.mjs",
   "bin": {
@@ -21,7 +21,7 @@
     "shelljs": "^0.8.3",
     "simple-git": "^1.107.0",
     "smart-buffer": "^4.0.2",
-    "smartweave": "^0.3.6",
+    "smartweave": "github:TheTechTrap/SmartWeave#v0.4.0",
     "url-parse": "^1.4.4",
     "zlib": "^1.0.5"
   },
