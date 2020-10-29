@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-
-import Helper from "./helper.js";
+import axios from "axios";
+import Helper, { VERSION } from "./helper.js";
 
 const main = async () => {
   const args = process.argv.slice(2);
@@ -10,6 +10,15 @@ const main = async () => {
     console.error("Usage: git-remote-dgit <name> <url>");
     process.exit(1);
   }
+
+  // Show warning when newer version is available
+  try {
+  const npmRegistryApi = "https://registry.npmjs.org/-/package/@thetechtrap/git-remote-dgit/dist-tags"
+  const { data } = await axios.get(npmRegistryApi)
+  if (VERSION !== data.latest) {
+    console.error(`Warning: New version ${data.latest} of git-remote-gitopia is available. Please upgrade.`)
+  }
+  } catch (error) {}
 
   const name = args[0] === args[1] ? "_" : args[0];
   const url = args[1];

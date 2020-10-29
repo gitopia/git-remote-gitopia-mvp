@@ -4,12 +4,13 @@
   "description": "git-remote-helper for Dgit",
   "main": "bin/index.mjs",
   "bin": {
-    "git-remote-dgit": "bin/index.mjs"
+    "git-remote-gitopia": "bin/index.mjs"
   },
   "type": "module",
   "dependencies": {
     "arweave": "^1.9.1",
     "arweave-bundles": "^1.0.0",
+    "axios": "^0.21.0",
     "cids": "^0.5.7",
     "cli-progress": "^3.8.2",
     "debug": "^4.1.1",

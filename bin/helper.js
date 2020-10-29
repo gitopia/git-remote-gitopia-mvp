@@ -11,7 +11,6 @@ import DGitHelper from "./lib/dgit.js";
 import LineHelper from "./lib/line.js";
 import Arweave from "arweave";
 import {
-  pushGitObject,
   makeDataItem,
   makeUpdateRefDataItem,
   parseArgitRemoteURI,
@@ -21,9 +20,10 @@ import { getAllRefs } from "./lib/graphql.js";
 
 import * as deepHash from "arweave/node/lib/deepHash.js";
 import ArweaveBundles from "arweave-bundles";
-
 import pkg from "cli-progress";
 const { SingleBar, Presets } = pkg;
+
+export const VERSION = "0.1.4"
 
 const _timeout = async (duration) => {
   return new Promise((resolve, reject) => {
@@ -65,7 +65,7 @@ export default class Helper {
     // config
     this.config = this._config();
     // lib
-    this.debug = debug("dgit");
+    this.debug = debug("gitopia");
     this.line = new LineHelper();
     this.git = new GitHelper(this);
     this.dgit = new DGitHelper(this);
@@ -134,7 +134,6 @@ export default class Helper {
     forPush ? this.debug("cmd", "list", "for-push") : this.debug("cmd, list");
 
     const refs = await this._fetchRefs();
-    console.error("refs", refs);
     // tslint:disable-next-line:forin
     for (const ref in refs) {
       this._send(refs[ref] + " " + ref);
@@ -165,11 +164,11 @@ export default class Helper {
     this.debug("cmd", line);
 
     if (!this.arweaveWalletPath) {
-      if (process.env.DGIT_WALLET) {
-        this.wallet = JSON.parse(process.env.DGIT_WALLET);
+      if (process.env.GITOPIA_WALLET) {
+        this.wallet = JSON.parse(process.env.GITOPIA_WALLET);
       } else {
         console.error(
-          "Missing ARWEAVE_WALLET_PATH or DGIT_WALLET env variable"
+          "Missing ARWEAVE_WALLET_PATH or GITOPIA_WALLET env variable"
         );
 
         this._die();
