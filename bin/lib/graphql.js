@@ -96,7 +96,7 @@ export const getAllRefs = async (arweave, remoteURI) => {
 
   for (const edge of edges) {
     for (const tag of edge.node.tags) {
-      if (tag.name === "ref") {
+      if (tag.name === "Ref") {
         refs.add(tag.value);
         break
       }
@@ -185,7 +185,7 @@ export const fetchGitObjects = async (arweave, arData, remoteURI) => {
           const data = await arData.decodeData(item, { string: false });
           for (let i = 0; i < item.tags.length; i++) {
             const tag = await arData.decodeTag(item.tags[i]);
-            if (tag.name === "oid") {
+            if (tag.name === "Oid") {
               const oid = tag.value;
               objects.push({ oid, data });
               break;
