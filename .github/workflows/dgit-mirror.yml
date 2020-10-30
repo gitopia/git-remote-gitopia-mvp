@@ -15,7 +15,7 @@ jobs:
           node-version: 12
           registry-url: https://registry.npmjs.org/
       - name: gitopia mirror action
-        uses: thetechtrap/gitopia-mirror-action@master
+        uses: gitopia/gitopia-mirror-action@master
         # The action should not publish any real changes, but should succeed.
         with:
           gitopiaWallet: "${{ secrets.GITOPIA_WALLET }}"

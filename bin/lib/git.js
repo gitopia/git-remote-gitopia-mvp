@@ -18,7 +18,7 @@ export default class GitHelper {
   // OK
   constructor(helper) {
     this.helper = helper;
-    this.debug = debug("dgit");
+    this.debug = debug("gitopia");
   }
 
   /***** core methods *****/
