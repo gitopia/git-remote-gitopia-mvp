@@ -23,7 +23,7 @@ import ArweaveBundles from "arweave-bundles";
 import pkg from "cli-progress";
 const { SingleBar, Presets } = pkg;
 
-export const VERSION = "0.1.5"
+export const VERSION = "0.1.6"
 
 const _timeout = async (duration) => {
   return new Promise((resolve, reject) => {

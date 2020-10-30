@@ -3,6 +3,14 @@ import { parseArgitRemoteURI } from "./arweave.js";
 
 const graphQlEndpoint = "https://arweave.net/graphql";
 
+const getTagValue = (tagName, tags) => {
+  for (const tag of tags) {
+    if (tag.name === tagName) {
+      return tag.value
+    }
+  }
+}
+
 export const getOidByRef = async (arweave, remoteURI, ref) => {
   const { repoOwnerAddress, repoName } = parseArgitRemoteURI(remoteURI)
   const { data } = await axios({
