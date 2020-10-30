@@ -14,10 +14,10 @@ export const getOidByRef = async (arweave, remoteURI, ref) => {
         transactions(
           owners: ["${repoOwnerAddress}"]
           tags: [
+            { name: "Type", values: ["update-ref"] }
             { name: "Repo", values: ["${repoName}"] }
             { name: "Version", values: ["0.0.2"] }
             { name: "Ref", values: ["${ref}"] }
-            { name: "Type", values: ["update-ref"] }
             { name: "App-Name", values: ["gitopia"] }
           ]
           first: 10
@@ -78,9 +78,9 @@ export const getAllRefs = async (arweave, remoteURI) => {
         transactions(
           owners: ["${repoOwnerAddress}"]
           tags: [
+            { name: "Type", values: ["update-ref"] }
             { name: "Repo", values: ["${repoName}"] }
             { name: "Version", values: ["0.0.2"] }
-            { name: "Type", values: ["update-ref"] }
             { name: "App-Name", values: ["gitopia"] }
           ]
         ) {
