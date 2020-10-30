@@ -93,9 +93,9 @@ export const postBundledTransaction = async (
 
   // Push triggered from gitopia mirror action
   if (process.env.GITHUB_SHA) {
-    tags.push({ name: "Origin", value: "gitopia-mirror-action" })
+    tx.addTag("Origin", "gitopia-mirror-action")
   } else {
-    tags.push({ name: "Origin", value: "git-remote-gitopia" })
+    tx.addTag("Origin", "git-remote-gitopia")
   }
 
   await arweave.transactions.sign(tx, wallet);
@@ -110,9 +110,7 @@ export const postBundledTransaction = async (
 
   // Send fee to PST holders
   const contractState = await smartweave.default.readContract(arweave, contractId);
-  console.error("contractState", contractState)
   const holder = smartweave.default.selectWeightedPstHolder(contractState.balances);
-  console.error("holder", holder)
   // send a fee. You should inform the user about this fee and amount.
   const pstTx = await arweave.createTransaction(
     { target: holder, quantity: arweave.ar.arToWinston("0.01") },
