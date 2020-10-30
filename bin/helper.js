@@ -11,7 +11,6 @@ import DGitHelper from "./lib/dgit.js";
 import LineHelper from "./lib/line.js";
 import Arweave from "arweave";
 import {
-  pushGitObject,
   makeDataItem,
   makeUpdateRefDataItem,
   parseArgitRemoteURI,
@@ -21,9 +20,10 @@ import { getAllRefs } from "./lib/graphql.js";
 
 import * as deepHash from "arweave/node/lib/deepHash.js";
 import ArweaveBundles from "arweave-bundles";
-
 import pkg from "cli-progress";
 const { SingleBar, Presets } = pkg;
+
+export const VERSION = "0.1.4"
 
 const _timeout = async (duration) => {
   return new Promise((resolve, reject) => {
@@ -61,11 +61,11 @@ export default class Helper {
     // address and path shortcuts
     this.address = this.url.split("://")[1];
     this.path = path.resolve(process.env.GIT_DIR || "");
-    this.arweaveWalletPath = process.env.ARWEAVE_WALLET_PATH;
+    this.gitopiaWalletPath = process.env.GITOPIA_WALLET_PATH;
     // config
     this.config = this._config();
     // lib
-    this.debug = debug("dgit");
+    this.debug = debug("gitopia");
     this.line = new LineHelper();
     this.git = new GitHelper(this);
     this.dgit = new DGitHelper(this);
@@ -134,7 +134,6 @@ export default class Helper {
     forPush ? this.debug("cmd", "list", "for-push") : this.debug("cmd, list");
 
     const refs = await this._fetchRefs();
-    console.error("refs", refs);
     // tslint:disable-next-line:forin
     for (const ref in refs) {
       this._send(refs[ref] + " " + ref);
@@ -164,18 +163,18 @@ export default class Helper {
   async _handlePush(line) {
     this.debug("cmd", line);
 
-    if (!this.arweaveWalletPath) {
-      if (process.env.DGIT_WALLET) {
-        this.wallet = JSON.parse(process.env.DGIT_WALLET);
+    if (!this.gitopiaWalletPath) {
+      if (process.env.GITOPIA_WALLET) {
+        this.wallet = JSON.parse(process.env.GITOPIA_WALLET);
       } else {
         console.error(
-          "Missing ARWEAVE_WALLET_PATH or DGIT_WALLET env variable"
+          "Missing GITOPIA_WALLET_PATH or GITOPIA_WALLET env variable"
         );
 
         this._die();
       }
     } else {
-      const rawdata = fs.readFileSync(this.arweaveWalletPath);
+      const rawdata = fs.readFileSync(this.gitopiaWalletPath);
       this.wallet = JSON.parse(rawdata);
     }
 
@@ -200,21 +199,21 @@ export default class Helper {
 
   // OK
   async _fetchRefs() {
-    this.debug("fetching remote refs from arweave");
+    this.debug("fetching remote refs from Gitopia");
 
     let start;
     let block;
     let events;
     const ops = [];
-    const spinner = ora("Fetching remote refs from arweave").start();
+    const spinner = ora("Fetching remote refs from Gitopia").start();
 
     try {
       const refs = await getAllRefs(this._arweave, this.url);
 
-      spinner.succeed("Remote refs fetched from arweave");
+      spinner.succeed("Remote refs fetched from Gitopia");
       return refs;
     } catch (err) {
-      spinner.fail("Failed to fetch remote refs from arweave");
+      spinner.fail("Failed to fetch remote refs from Gitopia");
       throw err;
     }
   }
@@ -348,7 +347,7 @@ export default class Helper {
 
         // upload git objects
         try {
-          spinner = ora("Uploading git objects to arweave").start();
+          spinner = ora("Uploading git objects to Gitopia").start();
           const dataItems = await Promise.all(puts);
           bar1.stop();
           await postBundledTransaction(
@@ -358,21 +357,21 @@ export default class Helper {
             this.url,
             dataItems
           );
-          spinner.succeed("Git objects uploaded to arweave");
+          spinner.succeed("Git objects uploaded to Gitopia");
         } catch (err) {
           spinner.fail(
-            "Failed to upload git objects to arweave: " + err.message
+            "Failed to upload git objects to Gitopia: " + err.message
           );
           this._die();
         }
 
         // register on chain
         try {
-          spinner = ora(`Updating ref ${dst} ${objects[0]} on arweave`).start();
+          spinner = ora(`Updating ref ${dst} ${objects[0]} on Gitopia`).start();
           spinner.succeed(`Updated ref ${dst} ${objects[0]} successfully`);
         } catch (err) {
           spinner.fail(
-            `Failed to update ref ${dst} ${objects[0]} on arweave: ` +
+            `Failed to update ref ${dst} ${objects[0]} on Gitopia: ` +
               err.message
           );
           this._die();

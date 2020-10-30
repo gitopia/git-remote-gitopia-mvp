@@ -1,4 +1,4 @@
-name: Dgit Mirror
+name: gitopia mirror
 
 on:
   push:
@@ -14,10 +14,10 @@ jobs:
         with:
           node-version: 12
           registry-url: https://registry.npmjs.org/
-      - name: Dgit mirror action
-        uses: thetechtrap/dgit-action@master
+      - name: gitopia mirror action
+        uses: thetechtrap/gitopia-mirror-action@master
         # The action should not publish any real changes, but should succeed.
         with:
-          dgitWallet: "${{ secrets.DGIT_WALLET }}"
+          gitopiaWallet: "${{ secrets.GITOPIA_WALLET }}"
           branch: "master"
-          remoteUrl: "dgit://7yFP2o906A3nDl5eCMtN4Ycs9m5otfRrJDAGoGKDoHk/git-remote-dgit"
+          remoteUrl: "gitopia://7yFP2o906A3nDl5eCMtN4Ycs9m5otfRrJDAGoGKDoHk/git-remote-gitopia"

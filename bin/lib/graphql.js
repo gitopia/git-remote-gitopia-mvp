@@ -4,10 +4,10 @@ import { parseArgitRemoteURI } from "./arweave.js";
 const graphQlEndpoint = "https://arweave.net/graphql";
 
 export const getOidByRef = async (arweave, remoteURI, ref) => {
-  const { repoOwnerAddress, repoName } = parseArgitRemoteURI(remoteURI);
+  const { repoOwnerAddress, repoName } = parseArgitRemoteURI(remoteURI)
   const { data } = await axios({
     url: graphQlEndpoint,
-    method: "post",
+    method: 'post',
     data: {
       query: `
       query {
@@ -15,34 +15,55 @@ export const getOidByRef = async (arweave, remoteURI, ref) => {
           owners: ["${repoOwnerAddress}"]
           tags: [
             { name: "Repo", values: ["${repoName}"] }
-            { name: "ref", values: ["${ref}"] }
+            { name: "Version", values: ["0.0.2"] }
+            { name: "Ref", values: ["${ref}"] }
             { name: "Type", values: ["update-ref"] }
-            { name: "App-Name", values: ["dgit"] }
+            { name: "App-Name", values: ["gitopia"] }
           ]
-          first: 1
+          first: 10
         ) {
           edges {
             node {
               id
+              tags {
+                name
+                value
+              }
+              block {
+                height
+              }
             }
           }
         }
       }`,
     },
-  });
+  })
 
-  const edges = data.data.transactions.edges;
-
+  const edges = data.data.transactions.edges
   if (edges.length === 0) {
-    return "0000000000000000000000000000000000000000";
+    return {
+      oid: null,
+      numCommits: 0
+    }
   }
 
-  const id = edges[0].node.id;
-  return await arweave.transactions.getData(id, {
+  edges.sort((a, b) => {
+    if ((b.node.block.height - a.node.block.height) < 50) {
+      const bUnixTime = Number(getTagValue("Unix-Time", b.node.tags))
+      const aUnixTime = Number(getTagValue("Unix-Time", a.node.tags))
+      return bUnixTime - aUnixTime
+    }
+    return 0
+  })
+
+  const id = edges[0].node.id
+  const response = await arweave.transactions.getData(id, {
     decode: true,
     string: true,
-  });
-};
+  })
+
+  return JSON.parse(response)
+}
 
 export const getAllRefs = async (arweave, remoteURI) => {
   let refs = new Set();
@@ -58,8 +79,9 @@ export const getAllRefs = async (arweave, remoteURI) => {
           owners: ["${repoOwnerAddress}"]
           tags: [
             { name: "Repo", values: ["${repoName}"] }
+            { name: "Version", values: ["0.0.2"] }
             { name: "Type", values: ["update-ref"] }
-            { name: "App-Name", values: ["dgit"] }
+            { name: "App-Name", values: ["gitopia"] }
           ]
         ) {
           edges {
@@ -79,14 +101,16 @@ export const getAllRefs = async (arweave, remoteURI) => {
 
   for (const edge of edges) {
     for (const tag of edge.node.tags) {
-      if (tag.name === "ref") {
+      if (tag.name === "Ref") {
         refs.add(tag.value);
+        break
       }
     }
   }
 
   for (const ref of refs) {
-    refOidObj[ref] = await getOidByRef(arweave, remoteURI, ref);
+    const { oid } = await getOidByRef(arweave, remoteURI, ref);
+    refOidObj[ref] = oid
   }
 
   return refOidObj;
@@ -103,10 +127,11 @@ export const getTransactionIdByObjectId = async (remoteURI, oid) => {
         transactions(
           owners: ["${repoOwnerAddress}"]
           tags: [
-            { name: "oid", values: ["${oid}"] }
+            { name: "Oid", values: ["${oid}"] }
+            { name: "Version", values: ["0.0.2"] }
             { name: "Repo", values: ["${repoName}"] }
-            { name: "Type", values: ["push-git-object"] }
-            { name: "App-Name", values: ["dgit"] }
+            { name: "Type", values: ["git-object"] }
+            { name: "App-Name", values: ["gitopia"] }
           ]
           first: 1
         ) {
@@ -137,8 +162,9 @@ export const fetchGitObjects = async (arweave, arData, remoteURI) => {
           owners: ["${repoOwnerAddress}"]
           tags: [
             { name: "Type", values: ["git-objects-bundle"] }
+            { name: "Version", values: ["0.0.2"] }
             { name: "Repo", values: ["${repoName}"] }
-            { name: "App-Name", values: ["dgit"] }
+            { name: "App-Name", values: ["gitopia"] }
           ]
         ) {
           edges {
@@ -165,7 +191,7 @@ export const fetchGitObjects = async (arweave, arData, remoteURI) => {
           const data = await arData.decodeData(item, { string: false });
           for (let i = 0; i < item.tags.length; i++) {
             const tag = await arData.decodeTag(item.tags[i]);
-            if (tag.name === "oid") {
+            if (tag.name === "Oid") {
               const oid = tag.value;
               objects.push({ oid, data });
               break;
