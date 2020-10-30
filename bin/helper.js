@@ -23,7 +23,7 @@ import ArweaveBundles from "arweave-bundles";
 import pkg from "cli-progress";
 const { SingleBar, Presets } = pkg;
 
-export const VERSION = "0.1.4"
+export const VERSION = "0.1.5"
 
 const _timeout = async (duration) => {
   return new Promise((resolve, reject) => {
@@ -277,6 +277,10 @@ export default class Helper {
           .slice(0, -1)
           .map((object) => object.substr(0, 40));
 
+        if (objects.length === 0) {
+          this._exit()
+        }
+        
         // checking permissions
         try {
           spinner = ora(`Checking permissions over ${this.address}`).start();

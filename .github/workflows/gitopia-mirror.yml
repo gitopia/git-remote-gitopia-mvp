@@ -1,4 +1,4 @@
-name: gitopia mirror
+name: Gitopia mirror
 
 on:
   push:
@@ -14,7 +14,7 @@ jobs:
         with:
           node-version: 12
           registry-url: https://registry.npmjs.org/
-      - name: gitopia mirror action
+      - name: Gitopia mirror action
         uses: gitopia/gitopia-mirror-action@master
         # The action should not publish any real changes, but should succeed.
         with:
