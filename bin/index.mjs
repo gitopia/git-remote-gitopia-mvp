@@ -7,17 +7,20 @@ const main = async () => {
 
   if (args.length < 2) {
     // tslint:disable-next-line:no-console
-    console.error("Usage: git-remote-dgit <name> <url>");
+    console.error("Usage: git-remote-gitopia <name> <url>");
     process.exit(1);
   }
 
   // Show warning when newer version is available
   try {
-  const npmRegistryApi = "https://registry.npmjs.org/-/package/@thetechtrap/git-remote-dgit/dist-tags"
-  const { data } = await axios.get(npmRegistryApi)
-  if (VERSION !== data.latest) {
-    console.error(`Warning: New version ${data.latest} of git-remote-gitopia is available. Please upgrade.`)
-  }
+    const npmRegistryApi =
+      "https://registry.npmjs.org/-/package/@gitopia/git-remote-gitopia/dist-tags";
+    const { data } = await axios.get(npmRegistryApi);
+    if (VERSION !== data.latest) {
+      console.error(
+        `Warning: New version ${data.latest} of git-remote-gitopia is available. Please upgrade.`
+      );
+    }
   } catch (error) {}
 
   const name = args[0] === args[1] ? "_" : args[0];

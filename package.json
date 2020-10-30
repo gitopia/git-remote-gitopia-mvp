@@ -1,7 +1,7 @@
 {
-  "name": "@thetechtrap/git-remote-dgit",
+  "name": "@gitopia/git-remote-gitopia",
   "version": "0.1.4",
-  "description": "git-remote-helper for Dgit",
+  "description": "git-remote-helper for Gitopia",
   "main": "bin/index.mjs",
   "bin": {
     "git-remote-gitopia": "bin/index.mjs"
@@ -32,18 +32,18 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/TheTechTrap/git-remote-dgit.git"
+    "url": "git+https://github.com/gitopia/git-remote-gitopia.git"
   },
   "keywords": [
     "git-remote-helper",
-    "dgit",
+    "gitopia",
     "git",
     "arweave"
   ],
-  "author": "dgit@thetechtrap.com",
+  "author": "gitopia@thetechtrap.com",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/TheTechTrap/git-remote-dgit/issues"
+    "url": "https://github.com/gitopia/git-remote-gitopia/issues"
   },
-  "homepage": "https://github.com/TheTechTrap/git-remote-dgit#readme"
+  "homepage": "https://github.com/gitopia/git-remote-gitopia#readme"
 }
