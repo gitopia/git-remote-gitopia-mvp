@@ -20,4 +20,4 @@ jobs:
         with:
           gitopiaWallet: "${{ secrets.GITOPIA_WALLET }}"
           branch: "master"
-          remoteUrl: "gitopia://7yFP2o906A3nDl5eCMtN4Ycs9m5otfRrJDAGoGKDoHk/git-remote-gitopia"
+          remoteUrl: "gitopia://jf9rQRuE_TnKi5stRHbGk8pjtVKQ_0ikFs8tfYyZLMs/git-remote-gitopia"
