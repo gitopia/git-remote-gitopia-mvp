@@ -1,9 +1,6 @@
 import debug from "debug";
 import fs from "fs-extra";
-import json from "jsonfile";
-import Level from "level";
 import ora from "ora";
-import os from "os";
 import path from "path";
 import shell from "shelljs";
 import GitHelper from "./lib/git.js";
@@ -23,7 +20,7 @@ import ArweaveBundles from "arweave-bundles";
 import pkg from "cli-progress";
 const { SingleBar, Presets } = pkg;
 
-export const VERSION = "0.1.6"
+export const VERSION = "0.1.6";
 
 const _timeout = async (duration) => {
   return new Promise((resolve, reject) => {
@@ -262,14 +259,26 @@ export default class Helper {
 
       try {
         const refs = await this._fetchRefs();
-        const remote = refs[dst];
 
         const srcBranch = src.split("/").pop();
-        const dstBranch = dst.split("/").pop();
+        const srcOid = shell
+          .exec(`git rev-parse ${srcBranch}`, {
+            silent: true,
+          })
+          .stdout.split("\n")[0];
 
-        const revListCmd = remote
-          ? `git rev-list --objects --left-only ${srcBranch}...${this.name}/${dstBranch}`
-          : `git rev-list --objects ${srcBranch}`;
+        let remoteBranches = "";
+        for (const ref in refs) {
+          remoteBranches = remoteBranches.concat(
+            "^",
+            this.name,
+            "/",
+            ref.split("/").pop(),
+            " "
+          );
+        }
+
+        const revListCmd = `git rev-list --objects ${srcBranch} ${remoteBranches}`;
 
         const objects = shell
           .exec(revListCmd, { silent: true })
@@ -277,10 +286,6 @@ export default class Helper {
           .slice(0, -1)
           .map((object) => object.substr(0, 40));
 
-        if (objects.length === 0) {
-          this._exit()
-        }
-        
         // checking permissions
         try {
           spinner = ora(`Checking permissions over ${this.address}`).start();
@@ -305,13 +310,7 @@ export default class Helper {
 
         // update ref
         puts.push(
-          makeUpdateRefDataItem(
-            this.ArData,
-            this.wallet,
-            this.url,
-            dst,
-            objects[0]
-          )
+          makeUpdateRefDataItem(this.ArData, this.wallet, this.url, dst, srcOid)
         );
 
         // collect git objects
@@ -371,12 +370,11 @@ export default class Helper {
 
         // register on chain
         try {
-          spinner = ora(`Updating ref ${dst} ${objects[0]} on Gitopia`).start();
-          spinner.succeed(`Updated ref ${dst} ${objects[0]} successfully`);
+          spinner = ora(`Updating ref ${dst} ${srcOid} on Gitopia`).start();
+          spinner.succeed(`Updated ref ${dst} ${srcOid} successfully`);
         } catch (err) {
           spinner.fail(
-            `Failed to update ref ${dst} ${objects[0]} on Gitopia: ` +
-              err.message
+            `Failed to update ref ${dst} ${srcOid} on Gitopia: ` + err.message
           );
           this._die();
         }
