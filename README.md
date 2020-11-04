@@ -1,5 +1,6 @@
 # git-remote-gitopia
 
+[![](https://img.shields.io/npm/v/@gitopia/git-remote-gitopia?color=)](https://www.npmjs.com/package/@gitopia/git-remote-gitopia)  
 git remote helper for [Gitopia](https://gitopia.org)  
 PST Fee of 0.01 AR is applicable on git push.
 
