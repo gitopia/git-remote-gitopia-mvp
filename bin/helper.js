@@ -267,14 +267,13 @@ export default class Helper {
           .stdout.split("\n")[0];
 
         let remoteBranches = "";
-        for (const ref in refs) {
-          remoteBranches = remoteBranches.concat(
-            "^",
-            this.name,
-            "/",
-            ref.split("/").pop(),
-            " "
-          );
+        for (const [ref, oid] of Object.entries(refs)) {
+          const isValidLocalRef =
+            shell.exec(`git cat-file -p ${oid}`, { silent: true }).code === 0;
+
+          if (isValidLocalRef) {
+            remoteBranches = remoteBranches.concat("^", oid, " ");
+          }
         }
 
         const revListCmd = `git rev-list --objects ${srcBranch} ${remoteBranches}`;

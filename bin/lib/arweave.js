@@ -1,5 +1,8 @@
 import * as smartweave from "smartweave";
 import shell from "shelljs";
+import pkg from "bignumber.js";
+const { BigNumber } = pkg;
+
 import { VERSION } from "../helper.js";
 import { newProgressBar } from "./util.js";
 
@@ -123,9 +126,19 @@ export const postBundledTransaction = async (
   const holder = smartweave.default.selectWeightedPstHolder(
     contractState.balances
   );
-  // send a fee. You should inform the user about this fee and amount.
+
+  // PST Fee
+  const txFee = new BigNumber(tx.reward);
+  const pstFee = txFee.multipliedBy(0.1);
+
+  const quantity = pstFee.isGreaterThan(
+    BigNumber(arweave.ar.arToWinston("0.01"))
+  )
+    ? pstFee.toFixed(0)
+    : arweave.ar.arToWinston("0.01");
+
   const pstTx = await arweave.createTransaction(
-    { target: holder, quantity: arweave.ar.arToWinston("0.01") },
+    { target: holder, quantity },
     wallet
   );
   pstTx.addTag("Bundle-Txid", tx.id);
