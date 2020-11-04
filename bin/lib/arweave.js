@@ -1,10 +1,11 @@
 import * as smartweave from "smartweave";
 import shell from "shelljs";
 import { VERSION } from "../helper.js";
+import { newProgressBar } from "./util.js";
 
 // prettier-ignore
 const argitRemoteURIRegex = '^gitopia:\/\/([a-zA-Z0-9-_]{43})\/([A-Za-z0-9_.-]*)'
-const contractId = "UvjBvJUy8pOMR_lf85tBDaJD0jF85G5Ayj1p2h7yols";
+const contractId = "1ljLAR55OhtenU0iDWkLGT6jF4ApxeQd5P0gXNyNJXg";
 
 export function parseArgitRemoteURI(remoteURI) {
   const matchGroups = remoteURI.match(argitRemoteURIRegex);
@@ -104,12 +105,15 @@ export const postBundledTransaction = async (
   await arweave.transactions.sign(tx, wallet);
   const uploader = await arweave.transactions.getUploader(tx);
 
+  const bar = newProgressBar();
+  bar.start(uploader.totalChunks, 0);
+
   while (!uploader.isComplete) {
     await uploader.uploadChunk();
-    console.error(
-      `${uploader.pctComplete}% complete, ${uploader.uploadedChunks}/${uploader.totalChunks}`
-    );
+    bar.update(uploader.uploadedChunks);
   }
+
+  bar.stop();
 
   // Send fee to PST holders
   const contractState = await smartweave.default.readContract(

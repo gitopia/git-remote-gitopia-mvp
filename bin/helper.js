@@ -14,11 +14,10 @@ import {
   postBundledTransaction,
 } from "./lib/arweave.js";
 import { getAllRefs } from "./lib/graphql.js";
+import { newProgressBar } from "./lib/util.js";
 
 import * as deepHash from "arweave/node/lib/deepHash.js";
 import ArweaveBundles from "arweave-bundles";
-import pkg from "cli-progress";
-const { SingleBar, Presets } = pkg;
 
 export const VERSION = "0.1.6";
 
@@ -313,46 +312,38 @@ export default class Helper {
           makeUpdateRefDataItem(this.ArData, this.wallet, this.url, dst, srcOid)
         );
 
-        // collect git objects
-        spinner = ora("Collecting git objects [this may take a while]").start();
+        const bar1 = newProgressBar();
 
-        const bar1 = new SingleBar(
-          { stream: process.stderr },
-          Presets.shades_classic
-        );
+        // collect git objects
+        console.error("Collecting git objects [this may take a while]");
 
         bar1.start(objects.length, 0);
 
         try {
-          objects.map((oid) =>
+          for (const oid of objects) {
+            const object = await this.git.load(oid);
+            bar1.increment();
+
             puts.push(
-              (async (bar) => {
-                bar.increment();
+              makeDataItem(this.ArData, this.wallet, this.url, oid, object)
+            );
+          }
 
-                const object = await this.git.load(oid);
-                const dataItem = await makeDataItem(
-                  this.ArData,
-                  this.wallet,
-                  this.url,
-                  oid,
-                  object
-                );
-                return dataItem;
-              })(bar1)
-            )
-          );
-
-          spinner.succeed("Git objects collected");
+          // spinner.succeed("Git objects collected");
         } catch (err) {
-          spinner.fail("Failed to collect git objects: " + err.message);
+          // spinner.fail("Failed to collect git objects: " + err.message);
           this._die();
         }
 
+        const dataItems = await Promise.all(puts);
+        bar1.stop();
+        console.error("Git objects collected successfully");
+
         // upload git objects
         try {
-          spinner = ora("Uploading git objects to Gitopia").start();
-          const dataItems = await Promise.all(puts);
-          bar1.stop();
+          console.error(
+            "Uploading git objects to Gitopia [this may take a while]"
+          );
           await postBundledTransaction(
             this._arweave,
             this.ArData,
@@ -360,7 +351,7 @@ export default class Helper {
             this.url,
             dataItems
           );
-          spinner.succeed("Git objects uploaded to Gitopia");
+          console.error("Git objects uploaded to Gitopia successfully");
         } catch (err) {
           spinner.fail(
             "Failed to upload git objects to Gitopia: " + err.message

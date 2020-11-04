@@ -7,8 +7,6 @@ import gitP from "simple-git/promise.js";
 import pkg from "smart-buffer";
 const { SmartBuffer } = pkg;
 import zlib from "zlib";
-import pkg1 from "cli-progress";
-const { SingleBar, Presets } = pkg1;
 
 import { fetchGitObjects } from "./graphql.js";
 
@@ -42,20 +40,11 @@ export default class GitHelper {
       this.helper.url
     );
 
-    const bar1 = new SingleBar(
-      { stream: process.stderr },
-      Presets.shades_classic
-    );
-
-    bar1.start(objects.length, 0);
-
     for (const object of objects) {
-      bar1.increment();
       dumps.push(this.dump(object.oid, object.data));
     }
 
     await Promise.all(dumps);
-    bar1.stop();
   }
 
   /***** fs-related methods *****/

@@ -1,5 +1,6 @@
 import axios from "axios";
 import { parseArgitRemoteURI } from "./arweave.js";
+import { newProgressBar } from "./util.js";
 
 const graphQlEndpoint = "https://arweave.net/graphql";
 
@@ -188,6 +189,14 @@ export const fetchGitObjects = async (arweave, arData, remoteURI) => {
   });
 
   const edges = data.data.transactions.edges;
+
+  const bar1 = newProgressBar();
+
+  console.error(
+    "Downloading git objects bundle from Gitopia [this may take a while]"
+  );
+  bar1.start(edges.length, 0);
+
   await Promise.all(
     edges.map(async (edge) => {
       const txid = edge.node.id;
@@ -209,8 +218,12 @@ export const fetchGitObjects = async (arweave, arData, remoteURI) => {
           }
         })
       );
+      bar1.increment();
     })
   );
+
+  bar1.stop();
+  console.error("Downloaded git objects bundle from Gitopia successfully");
 
   return objects;
 };
