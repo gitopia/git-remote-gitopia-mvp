@@ -19,7 +19,7 @@ import { newProgressBar } from "./lib/util.js";
 import * as deepHash from "arweave/node/lib/deepHash.js";
 import ArweaveBundles from "arweave-bundles";
 
-export const VERSION = "0.1.6";
+export const VERSION = "0.1.7";
 
 const _timeout = async (duration) => {
   return new Promise((resolve, reject) => {
