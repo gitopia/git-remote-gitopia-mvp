@@ -1,4 +1,4 @@
-name: Gitopia mirror
+name: Mirror to Gitopia
 
 on:
   push:
@@ -10,14 +10,15 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v1
         with:
           node-version: 12
           registry-url: https://registry.npmjs.org/
-      - name: Gitopia mirror action
-        uses: gitopia/gitopia-mirror-action@master
-        # The action should not publish any real changes, but should succeed.
+      - name: Gitopia Mirror Action
+        uses: gitopia/gitopia-mirror-action@v0.1.2
         with:
           gitopiaWallet: "${{ secrets.GITOPIA_WALLET }}"
           branch: "master"
-          remoteUrl: "gitopia://jf9rQRuE_TnKi5stRHbGk8pjtVKQ_0ikFs8tfYyZLMs/git-remote-gitopia"
+          remoteUrl: "gitopia://z_TqsbmVJOKzpuQH4YrYXv_Q0DrkwDwc0UqapRrE0Do/git-remote-gitopia"

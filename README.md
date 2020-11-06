@@ -1,8 +1,14 @@
 # git-remote-gitopia
 
-[![](https://img.shields.io/npm/v/@gitopia/git-remote-gitopia?color=)](https://www.npmjs.com/package/@gitopia/git-remote-gitopia)  
+[![](https://img.shields.io/npm/v/@gitopia/git-remote-gitopia?color=)](https://www.npmjs.com/package/@gitopia/git-remote-gitopia)
+[![Gitopia](https://img.shields.io/endpoint?style=&url=https://gitopia.org/mirror-badge.json)](https://gitopia.org/#/z_TqsbmVJOKzpuQH4YrYXv_Q0DrkwDwc0UqapRrE0Do/git-remote-gitopia)
+
 git remote helper for [Gitopia](https://gitopia.org)  
-PST Fee of 0.01 AR is applicable on git push.
+0.01 AR or 10% of the transaction fee, whichever is greater, will be charged as PST fee on git push. You don’t require an Arweave wallet for cloning repositories hence it’s free.
+
+## Installation
+
+`npm install -g @gitopia/git-remote-gitopia`
 
 ## Steps to Build
 
