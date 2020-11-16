@@ -12,20 +12,16 @@
     "arweave-bundles": "^1.0.0",
     "axios": "^0.21.0",
     "bignumber.js": "^9.0.1",
-    "cids": "^0.5.7",
     "cli-progress": "^3.8.2",
     "debug": "^4.1.1",
     "fs-extra": "^7.0.1",
-    "ipld-git": "^0.2.3",
+    "isomorphic-git": "^1.8.0",
     "jsonfile": "^5.0.0",
     "level": "^5.0.0",
     "ora": "^3.1.0",
     "shelljs": "^0.8.3",
-    "simple-git": "^1.107.0",
-    "smart-buffer": "^4.0.2",
     "smartweave": "github:TheTechTrap/SmartWeave#v0.4.0",
-    "url-parse": "^1.4.4",
-    "zlib": "^1.0.5"
+    "url-parse": "^1.4.4"
   },
   "devDependencies": {},
   "scripts": {

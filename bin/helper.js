@@ -4,7 +4,6 @@ import ora from "ora";
 import path from "path";
 import shell from "shelljs";
 import GitHelper from "./lib/git.js";
-import DGitHelper from "./lib/dgit.js";
 import LineHelper from "./lib/line.js";
 import Arweave from "arweave";
 import {
@@ -64,7 +63,6 @@ export default class Helper {
     this.debug = debug("gitopia");
     this.line = new LineHelper();
     this.git = new GitHelper(this);
-    this.dgit = new DGitHelper(this);
   }
 
   // OK
@@ -253,7 +251,7 @@ export default class Helper {
       let spinner;
       let txHash;
       let mapping = {};
-      const puts = [];
+      let dataItems = [];
       const pins = [];
 
       try {
@@ -306,37 +304,44 @@ export default class Helper {
           this._die();
         }
 
-        // update ref
-        puts.push(
-          makeUpdateRefDataItem(this.ArData, this.wallet, this.url, dst, srcOid)
-        );
-
-        const bar1 = newProgressBar();
-
         // collect git objects
         console.error("Collecting git objects [this may take a while]");
 
+        const bar1 = newProgressBar();
         bar1.start(objects.length, 0);
 
         try {
           for (const oid of objects) {
             const object = await this.git.load(oid);
-            bar1.increment();
-
-            puts.push(
-              makeDataItem(this.ArData, this.wallet, this.url, oid, object)
+            const dataItem = await makeDataItem(
+              this.ArData,
+              this.wallet,
+              this.url,
+              oid,
+              object
             );
+            dataItems.push(dataItem);
+
+            bar1.increment();
           }
 
-          // spinner.succeed("Git objects collected");
+          // update ref
+          dataItems.push(
+            await makeUpdateRefDataItem(
+              this.ArData,
+              this.wallet,
+              this.url,
+              dst,
+              srcOid
+            )
+          );
+
+          bar1.stop();
+          console.error("Git objects collected successfully");
         } catch (err) {
-          // spinner.fail("Failed to collect git objects: " + err.message);
+          console.error("Failed to collect git objects: " + err.message);
           this._die();
         }
-
-        const dataItems = await Promise.all(puts);
-        bar1.stop();
-        console.error("Git objects collected successfully");
 
         // upload git objects
         try {
