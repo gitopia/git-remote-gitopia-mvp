@@ -8,9 +8,11 @@ import LineHelper from "./lib/line.js";
 import Arweave from "arweave";
 import {
   makeDataItem,
-  makeUpdateRefDataItem,
+  makeUpdateRefTx,
   parseArgitRemoteURI,
-  postBundledTransaction,
+  makeBundledDataTx,
+  postTransaction,
+  sendPSTFee,
 } from "./lib/arweave.js";
 import { getAllRefs } from "./lib/graphql.js";
 import { newProgressBar } from "./lib/util.js";
@@ -19,6 +21,8 @@ import * as deepHash from "arweave/node/lib/deepHash.js";
 import ArweaveBundles from "arweave-bundles";
 
 export const VERSION = "0.1.7";
+
+const CHUNK_SIZE = 128 * 1024 * 1024; // 128Mb
 
 const _timeout = async (duration) => {
   return new Promise((resolve, reject) => {
@@ -249,10 +253,7 @@ export default class Helper {
 
     return (async (resolve, reject) => {
       let spinner;
-      let txHash;
-      let mapping = {};
-      let dataItems = [];
-      const pins = [];
+      let bundledDataTxs = [];
 
       try {
         const refs = await this._fetchRefs();
@@ -310,9 +311,14 @@ export default class Helper {
         const bar1 = newProgressBar();
         bar1.start(objects.length, 0);
 
+        let currentChunk = [];
+        let currentChunkSize = 0;
+
         try {
-          for (const oid of objects) {
+          for (let i = 0; i < objects.length; i++) {
+            const oid = objects[i];
             const object = await this.git.load(oid);
+
             const dataItem = await makeDataItem(
               this.ArData,
               this.wallet,
@@ -320,23 +326,34 @@ export default class Helper {
               oid,
               object
             );
-            dataItems.push(dataItem);
+
+            currentChunkSize += Buffer.byteLength(
+              JSON.stringify(dataItem),
+              "utf8"
+            );
+            currentChunk.push(dataItem);
+
+            if (currentChunkSize >= CHUNK_SIZE || i === objects.length - 1) {
+              const bundledDataTx = await makeBundledDataTx(
+                this._arweave,
+                this.ArData,
+                this.wallet,
+                this.url,
+                currentChunk
+              );
+
+              // Reset chunk
+              currentChunkSize = 0;
+              currentChunk = [];
+
+              bundledDataTxs.push(bundledDataTx);
+            }
 
             bar1.increment();
           }
 
-          // update ref
-          dataItems.push(
-            await makeUpdateRefDataItem(
-              this.ArData,
-              this.wallet,
-              this.url,
-              dst,
-              srcOid
-            )
-          );
-
           bar1.stop();
+
           console.error("Git objects collected successfully");
         } catch (err) {
           console.error("Failed to collect git objects: " + err.message);
@@ -348,13 +365,35 @@ export default class Helper {
           console.error(
             "Uploading git objects to Gitopia [this may take a while]"
           );
-          await postBundledTransaction(
+
+          // Git object bundles
+          await Promise.all(
+            bundledDataTxs.map(
+              async (bundleDataTx) =>
+                await postTransaction(this._arweave, bundleDataTx)
+            )
+          );
+
+          // update ref
+          const updateRefTx = await makeUpdateRefTx(
             this._arweave,
-            this.ArData,
             this.wallet,
             this.url,
-            dataItems
+            dst,
+            srcOid,
+            bundledDataTxs
           );
+          await postTransaction(this._arweave, updateRefTx);
+
+          // PST Fee
+          await sendPSTFee(
+            this._arweave,
+            this.wallet,
+            this.url,
+            bundledDataTxs,
+            updateRefTx.id
+          );
+
           console.error("Git objects uploaded to Gitopia successfully");
         } catch (err) {
           spinner.fail(

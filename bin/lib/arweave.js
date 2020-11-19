@@ -18,27 +18,15 @@ export function parseArgitRemoteURI(remoteURI) {
   return { repoOwnerAddress, repoName };
 }
 
-export async function makeUpdateRefDataItem(
-  arData,
+export async function makeUpdateRefTx(
+  arweave,
   wallet,
   remoteURI,
   ref,
-  oid
+  oid,
+  bundledDataTxs
 ) {
   const { repoName } = parseArgitRemoteURI(remoteURI);
-  const tags = [
-    { name: "Repo", value: repoName },
-    { name: "Version", value: "0.0.2" },
-    { name: "Ref", value: ref },
-    { name: "Type", value: "update-ref" },
-    { name: "App-Name", value: "Gitopia" },
-    {
-      name: "Unix-Time",
-      value: Math.round(new Date().getTime() / 1000).toString(),
-    },
-    { name: "Content-Type", value: "application/json" },
-  ];
-
   const numCommits = shell
     .exec(`git rev-list --count ${ref}`, { silent: true })
     .stdout.trim();
@@ -48,8 +36,33 @@ export async function makeUpdateRefDataItem(
   };
   const data = JSON.stringify(obj);
 
-  const item = await arData.createData({ data, tags }, wallet);
-  return await arData.sign(item, wallet);
+  const tx = await arweave.createTransaction({ data }, wallet);
+
+  tx.addTag("Repo", repoName);
+  tx.addTag("Version", "0.0.2");
+  tx.addTag("Ref", ref);
+  tx.addTag("Type", "update-ref");
+  tx.addTag("App-Name", "Gitopia");
+  tx.addTag("Unix-Time", Math.round(new Date().getTime() / 1000).toString());
+  tx.addTag("Content-Type", "application/json");
+  tx.addTag("Helper", VERSION);
+
+  // Push triggered from gitopia mirror action
+  if (process.env.GITHUB_SHA) {
+    tx.addTag("Origin", "gitopia-mirror-action");
+  } else {
+    tx.addTag("Origin", "git-remote-gitopia");
+  }
+
+  const bundledDataTxIds = [];
+  for (let i = 0; i < bundledDataTxs.length; i++) {
+    bundledDataTxIds.push(bundledDataTxs[i].id);
+  }
+
+  tx.addTag("Reference-Txs", JSON.stringify(bundledDataTxIds));
+
+  await arweave.transactions.sign(tx, wallet);
+  return tx;
 }
 
 export const makeDataItem = async (
@@ -77,7 +90,7 @@ export const makeDataItem = async (
   return await arData.sign(item, wallet);
 };
 
-export const postBundledTransaction = async (
+export const makeBundledDataTx = async (
   arweave,
   arData,
   wallet,
@@ -95,17 +108,13 @@ export const postBundledTransaction = async (
   tx.addTag("Bundle-Format", "json");
   tx.addTag("Bundle-Version", "1.0.0");
   tx.addTag("Content-Type", "application/json");
-  tx.addTag("Helper", VERSION);
   tx.addTag("Unix-Time", Math.round(new Date().getTime() / 1000).toString());
 
-  // Push triggered from gitopia mirror action
-  if (process.env.GITHUB_SHA) {
-    tx.addTag("Origin", "gitopia-mirror-action");
-  } else {
-    tx.addTag("Origin", "git-remote-gitopia");
-  }
-
   await arweave.transactions.sign(tx, wallet);
+  return tx;
+};
+
+export const postTransaction = async (arweave, tx) => {
   const uploader = await arweave.transactions.getUploader(tx);
 
   const bar = newProgressBar();
@@ -117,8 +126,16 @@ export const postBundledTransaction = async (
   }
 
   bar.stop();
+};
 
-  // Send fee to PST holders
+export const sendPSTFee = async (
+  arweave,
+  wallet,
+  remoteURI,
+  transactions,
+  referenceId
+) => {
+  const { repoName } = parseArgitRemoteURI(remoteURI);
   const contractState = await smartweave.default.readContract(
     arweave,
     contractId
@@ -128,8 +145,13 @@ export const postBundledTransaction = async (
   );
 
   // PST Fee
-  const txFee = new BigNumber(tx.reward);
-  const pstFee = txFee.multipliedBy(0.1);
+  let totalTxFee = new BigNumber(0);
+  for (let i = 0; i < transactions.length; i++) {
+    const txFee = new BigNumber(transactions[i].reward);
+    totalTxFee = totalTxFee.plus(txFee);
+  }
+
+  const pstFee = totalTxFee.multipliedBy(0.1);
 
   const quantity = pstFee.isGreaterThan(
     BigNumber(arweave.ar.arToWinston("0.01"))
@@ -141,7 +163,7 @@ export const postBundledTransaction = async (
     { target: holder, quantity },
     wallet
   );
-  pstTx.addTag("Bundle-Txid", tx.id);
+  pstTx.addTag("Reference-Id", referenceId);
   pstTx.addTag("Repo", repoName);
   pstTx.addTag("Version", "0.0.2");
   pstTx.addTag("App-Name", "Gitopia");
