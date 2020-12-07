@@ -21,7 +21,7 @@ import { newProgressBar } from "./lib/util.js";
 import * as deepHash from "arweave/node/lib/deepHash.js";
 import ArweaveBundles from "arweave-bundles";
 
-export const VERSION = "0.1.7";
+export const VERSION = "0.1.8";
 
 const CHUNK_SIZE = 128 * 1024 * 1024; // 128Mb
 
