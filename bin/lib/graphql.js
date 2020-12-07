@@ -29,18 +29,11 @@ export const getOidByRef = async (arweave, remoteURI, ref) => {
             { name: "Ref", values: ["${ref}"] }
             { name: "App-Name", values: ["Gitopia"] }
           ]
-          first: 10
+          first: 1
         ) {
           edges {
             node {
               id
-              tags {
-                name
-                value
-              }
-              block {
-                height
-              }
             }
           }
         }
@@ -55,15 +48,6 @@ export const getOidByRef = async (arweave, remoteURI, ref) => {
       numCommits: 0,
     };
   }
-
-  edges.sort((a, b) => {
-    if (b.node.block.height - a.node.block.height < 50) {
-      const bUnixTime = Number(getTagValue("Unix-Time", b.node.tags));
-      const aUnixTime = Number(getTagValue("Unix-Time", a.node.tags));
-      return bUnixTime - aUnixTime;
-    }
-    return 0;
-  });
 
   const id = edges[0].node.id;
   const response = await arweave.transactions.getData(id, {

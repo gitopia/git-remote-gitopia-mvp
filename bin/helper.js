@@ -12,6 +12,7 @@ import {
   parseArgitRemoteURI,
   makeBundledDataTx,
   postTransaction,
+  waitTxPropogation,
   sendPSTFee,
 } from "./lib/arweave.js";
 import { getAllRefs } from "./lib/graphql.js";
@@ -253,7 +254,7 @@ export default class Helper {
 
     return (async (resolve, reject) => {
       let spinner;
-      let bundledDataTxs = [];
+      let bundledDatas = [];
 
       try {
         const refs = await this._fetchRefs();
@@ -334,19 +335,13 @@ export default class Helper {
             currentChunk.push(dataItem);
 
             if (currentChunkSize >= CHUNK_SIZE || i === objects.length - 1) {
-              const bundledDataTx = await makeBundledDataTx(
-                this._arweave,
-                this.ArData,
-                this.wallet,
-                this.url,
-                currentChunk
-              );
+              const bundledData = await this.ArData.bundleData(currentChunk);
 
               // Reset chunk
               currentChunkSize = 0;
               currentChunk = [];
 
-              bundledDataTxs.push(bundledDataTx);
+              bundledDatas.push(bundledData);
             }
 
             bar1.increment();
@@ -366,31 +361,53 @@ export default class Helper {
             "Uploading git objects to Gitopia [this may take a while]"
           );
 
+          const bundledDataTxInfo = [];
+
           // Git object bundles
-          await Promise.all(
-            bundledDataTxs.map(
-              async (bundleDataTx) =>
-                await postTransaction(this._arweave, bundleDataTx)
-            )
-          );
+          for (let i = 0; i < bundledDatas.length; i++) {
+            let bundledDataTx = null;
+
+            do {
+              bundledDataTx = await makeBundledDataTx(
+                this._arweave,
+                this.wallet,
+                this.url,
+                bundledDatas[i]
+              );
+              bundledDataTxInfo.push({
+                id: bundledDataTx.id,
+                reward: bundledDataTx.reward,
+              });
+
+              await postTransaction(this._arweave, bundledDataTx);
+            } while (
+              (await waitTxPropogation(this._arweave, bundledDataTx)) !== 202
+            );
+          }
 
           // update ref
-          const updateRefTx = await makeUpdateRefTx(
-            this._arweave,
-            this.wallet,
-            this.url,
-            dst,
-            srcOid,
-            bundledDataTxs
+          let updateRefTx = null;
+          do {
+            updateRefTx = await makeUpdateRefTx(
+              this._arweave,
+              this.wallet,
+              this.url,
+              dst,
+              srcOid,
+              bundledDataTxInfo
+            );
+
+            await postTransaction(this._arweave, updateRefTx);
+          } while (
+            (await waitTxPropogation(this._arweave, updateRefTx)) !== 202
           );
-          await postTransaction(this._arweave, updateRefTx);
 
           // PST Fee
           await sendPSTFee(
             this._arweave,
             this.wallet,
             this.url,
-            bundledDataTxs,
+            bundledDataTxInfo,
             updateRefTx.id
           );
 
