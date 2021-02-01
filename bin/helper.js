@@ -4,14 +4,16 @@ import ora from "ora";
 import path from "path";
 import shell from "shelljs";
 import GitHelper from "./lib/git.js";
-import DGitHelper from "./lib/dgit.js";
 import LineHelper from "./lib/line.js";
 import Arweave from "arweave";
 import {
+  arweave,
   makeDataItem,
-  makeUpdateRefDataItem,
+  makeUpdateRefTx,
   parseArgitRemoteURI,
-  postBundledTransaction,
+  makeBundledDataTx,
+  postTransaction,
+  sendPSTFee,
 } from "./lib/arweave.js";
 import { getAllRefs } from "./lib/graphql.js";
 import { newProgressBar } from "./lib/util.js";
@@ -19,7 +21,9 @@ import { newProgressBar } from "./lib/util.js";
 import * as deepHash from "arweave/node/lib/deepHash.js";
 import ArweaveBundles from "arweave-bundles";
 
-export const VERSION = "0.1.7";
+export const VERSION = "0.1.8";
+
+const CHUNK_SIZE = 100 * 1024; // 128Mb
 
 const _timeout = async (duration) => {
   return new Promise((resolve, reject) => {
@@ -64,7 +68,6 @@ export default class Helper {
     this.debug = debug("gitopia");
     this.line = new LineHelper();
     this.git = new GitHelper(this);
-    this.dgit = new DGitHelper(this);
   }
 
   // OK
@@ -72,11 +75,7 @@ export default class Helper {
     // create dirs
     // fs.ensureDirSync(path.join(this.path, "refs", "remotes", this.name));
     // fs.ensureDirSync(path.join(this.path, "dgit", "refs"));
-    this._arweave = Arweave.init({
-      host: "arweave.net",
-      port: 443,
-      protocol: "https",
-    });
+
     const deps = {
       utils: Arweave.utils,
       crypto: Arweave.crypto,
@@ -204,7 +203,7 @@ export default class Helper {
     const spinner = ora("Fetching remote refs from Gitopia").start();
 
     try {
-      const refs = await getAllRefs(this._arweave, this.url);
+      const refs = await getAllRefs(this.url);
 
       spinner.succeed("Remote refs fetched from Gitopia");
       return refs;
@@ -251,10 +250,7 @@ export default class Helper {
 
     return (async (resolve, reject) => {
       let spinner;
-      let txHash;
-      let mapping = {};
-      const puts = [];
-      const pins = [];
+      let bundledDatas = [];
 
       try {
         const refs = await this._fetchRefs();
@@ -288,7 +284,7 @@ export default class Helper {
         try {
           spinner = ora(`Checking permissions over ${this.address}`).start();
           // check push permission for repo
-          const address = await this._arweave.wallets.jwkToAddress(this.wallet);
+          const address = await arweave.wallets.jwkToAddress(this.wallet);
           const { repoOwnerAddress } = parseArgitRemoteURI(this.url);
 
           if (address === repoOwnerAddress) {
@@ -306,50 +302,96 @@ export default class Helper {
           this._die();
         }
 
-        // update ref
-        puts.push(
-          makeUpdateRefDataItem(this.ArData, this.wallet, this.url, dst, srcOid)
-        );
-
-        const bar1 = newProgressBar();
-
         // collect git objects
         console.error("Collecting git objects [this may take a while]");
 
+        const bar1 = newProgressBar();
         bar1.start(objects.length, 0);
 
-        try {
-          for (const oid of objects) {
-            const object = await this.git.load(oid);
-            bar1.increment();
+        let currentChunk = [];
+        let currentChunkSize = 0;
 
-            puts.push(
-              makeDataItem(this.ArData, this.wallet, this.url, oid, object)
+        try {
+          for (let i = 0; i < objects.length; i++) {
+            const oid = objects[i];
+            const object = await this.git.load(oid);
+
+            const dataItem = await makeDataItem(
+              this.ArData,
+              this.wallet,
+              this.url,
+              oid,
+              object
             );
+
+            currentChunkSize += Buffer.byteLength(
+              JSON.stringify(dataItem),
+              "utf8"
+            );
+            currentChunk.push(dataItem);
+
+            if (currentChunkSize >= CHUNK_SIZE || i === objects.length - 1) {
+              const bundledData = await this.ArData.bundleData(currentChunk);
+
+              // Reset chunk
+              currentChunkSize = 0;
+              currentChunk = [];
+
+              bundledDatas.push(bundledData);
+            }
+
+            bar1.increment();
           }
 
-          // spinner.succeed("Git objects collected");
+          bar1.stop();
+
+          console.error("Git objects collected successfully");
         } catch (err) {
-          // spinner.fail("Failed to collect git objects: " + err.message);
+          console.error("Failed to collect git objects: " + err.message);
           this._die();
         }
-
-        const dataItems = await Promise.all(puts);
-        bar1.stop();
-        console.error("Git objects collected successfully");
 
         // upload git objects
         try {
           console.error(
             "Uploading git objects to Gitopia [this may take a while]"
           );
-          await postBundledTransaction(
-            this._arweave,
-            this.ArData,
+
+          const bundledDataTxInfo = [];
+
+          // Git object bundles
+          for (let i = 0; i < bundledDatas.length; i++) {
+            let bundledDataTx = await makeBundledDataTx(
+              this.wallet,
+              this.url,
+              bundledDatas[i]
+            );
+            bundledDataTxInfo.push({
+              id: bundledDataTx.id,
+              reward: bundledDataTx.reward,
+            });
+
+            await postTransaction(bundledDataTx);
+          }
+
+          // update ref
+          const updateRefTx = await makeUpdateRefTx(
             this.wallet,
             this.url,
-            dataItems
+            dst,
+            srcOid,
+            bundledDataTxInfo
           );
+          await postTransaction(updateRefTx);
+
+          // PST Fee
+          await sendPSTFee(
+            this.wallet,
+            this.url,
+            bundledDataTxInfo,
+            updateRefTx.id
+          );
+
           console.error("Git objects uploaded to Gitopia successfully");
         } catch (err) {
           spinner.fail(

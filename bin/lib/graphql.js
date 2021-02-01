@@ -1,5 +1,5 @@
 import axios from "axios";
-import { parseArgitRemoteURI } from "./arweave.js";
+import { arweave, parseArgitRemoteURI } from "./arweave.js";
 import { newProgressBar } from "./util.js";
 
 const graphQlEndpoint = "https://arweave.net/graphql";
@@ -12,7 +12,7 @@ const getTagValue = (tagName, tags) => {
   }
 };
 
-export const getOidByRef = async (arweave, remoteURI, ref) => {
+export const getOidByRef = async (remoteURI, ref) => {
   const { repoOwnerAddress, repoName } = parseArgitRemoteURI(remoteURI);
   const { data } = await axios({
     url: graphQlEndpoint,
@@ -29,18 +29,11 @@ export const getOidByRef = async (arweave, remoteURI, ref) => {
             { name: "Ref", values: ["${ref}"] }
             { name: "App-Name", values: ["Gitopia"] }
           ]
-          first: 10
+          first: 1
         ) {
           edges {
             node {
               id
-              tags {
-                name
-                value
-              }
-              block {
-                height
-              }
             }
           }
         }
@@ -56,15 +49,6 @@ export const getOidByRef = async (arweave, remoteURI, ref) => {
     };
   }
 
-  edges.sort((a, b) => {
-    if (b.node.block.height - a.node.block.height < 50) {
-      const bUnixTime = Number(getTagValue("Unix-Time", b.node.tags));
-      const aUnixTime = Number(getTagValue("Unix-Time", a.node.tags));
-      return bUnixTime - aUnixTime;
-    }
-    return 0;
-  });
-
   const id = edges[0].node.id;
   const response = await arweave.transactions.getData(id, {
     decode: true,
@@ -74,7 +58,7 @@ export const getOidByRef = async (arweave, remoteURI, ref) => {
   return JSON.parse(response);
 };
 
-export const getAllRefs = async (arweave, remoteURI) => {
+export const getAllRefs = async (remoteURI) => {
   let refs = new Set();
   let refOidObj = {};
   const { repoOwnerAddress, repoName } = parseArgitRemoteURI(remoteURI);
@@ -119,7 +103,7 @@ export const getAllRefs = async (arweave, remoteURI) => {
   }
 
   for (const ref of refs) {
-    const { oid } = await getOidByRef(arweave, remoteURI, ref);
+    const { oid } = await getOidByRef(remoteURI, ref);
     refOidObj[ref] = oid;
   }
 
@@ -159,7 +143,7 @@ export const getTransactionIdByObjectId = async (remoteURI, oid) => {
   return edges[0].node.id;
 };
 
-export const fetchGitObjects = async (arweave, arData, remoteURI) => {
+export const fetchGitObjects = async (arData, remoteURI) => {
   const objects = [];
   const { repoOwnerAddress, repoName } = parseArgitRemoteURI(remoteURI);
   const { data } = await axios({
@@ -204,9 +188,10 @@ export const fetchGitObjects = async (arweave, arData, remoteURI) => {
         decode: true,
         string: true,
       });
-      const items = await arData.unbundleData(txData);
-      await Promise.all(
-        items.map(async (item) => {
+
+      try {
+        const items = await arData.unbundleData(txData);
+        for (const item of items) {
           const data = await arData.decodeData(item, { string: false });
           for (let i = 0; i < item.tags.length; i++) {
             const tag = await arData.decodeTag(item.tags[i]);
@@ -216,8 +201,11 @@ export const fetchGitObjects = async (arweave, arData, remoteURI) => {
               break;
             }
           }
-        })
-      );
+        }
+      } catch (err) {
+        // corrupt bundled data
+      }
+
       bar1.increment();
     })
   );

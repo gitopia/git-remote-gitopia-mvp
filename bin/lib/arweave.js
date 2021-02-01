@@ -1,3 +1,4 @@
+import Arweave from "arweave";
 import * as smartweave from "smartweave";
 import shell from "shelljs";
 import pkg from "bignumber.js";
@@ -6,9 +7,22 @@ const { BigNumber } = pkg;
 import { VERSION } from "../helper.js";
 import { newProgressBar } from "./util.js";
 
+export const arweave = Arweave.init({
+  host: "arweave.net", // Arweave Gateway
+  //host: 'arweave.dev', // Arweave Dev Gateway
+  port: 443,
+  protocol: "https",
+  timeout: 600000,
+});
+
 // prettier-ignore
 const argitRemoteURIRegex = '^gitopia:\/\/([a-zA-Z0-9-_]{43})\/([A-Za-z0-9_.-]*)'
 const contractId = "1ljLAR55OhtenU0iDWkLGT6jF4ApxeQd5P0gXNyNJXg";
+
+const sleep = async (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const getStatus = async (txid) =>
+  (await arweave.transactions.getStatus(txid)).status;
 
 export function parseArgitRemoteURI(remoteURI) {
   const matchGroups = remoteURI.match(argitRemoteURIRegex);
@@ -18,27 +32,14 @@ export function parseArgitRemoteURI(remoteURI) {
   return { repoOwnerAddress, repoName };
 }
 
-export async function makeUpdateRefDataItem(
-  arData,
+export async function makeUpdateRefTx(
   wallet,
   remoteURI,
   ref,
-  oid
+  oid,
+  bundledDataTxInfo
 ) {
   const { repoName } = parseArgitRemoteURI(remoteURI);
-  const tags = [
-    { name: "Repo", value: repoName },
-    { name: "Version", value: "0.0.2" },
-    { name: "Ref", value: ref },
-    { name: "Type", value: "update-ref" },
-    { name: "App-Name", value: "Gitopia" },
-    {
-      name: "Unix-Time",
-      value: Math.round(new Date().getTime() / 1000).toString(),
-    },
-    { name: "Content-Type", value: "application/json" },
-  ];
-
   const numCommits = shell
     .exec(`git rev-list --count ${ref}`, { silent: true })
     .stdout.trim();
@@ -48,8 +49,31 @@ export async function makeUpdateRefDataItem(
   };
   const data = JSON.stringify(obj);
 
-  const item = await arData.createData({ data, tags }, wallet);
-  return await arData.sign(item, wallet);
+  const tx = await arweave.createTransaction({ data }, wallet);
+
+  tx.addTag("Repo", repoName);
+  tx.addTag("Version", "0.0.2");
+  tx.addTag("Ref", ref);
+  tx.addTag("Type", "update-ref");
+  tx.addTag("App-Name", "Gitopia");
+  tx.addTag("Unix-Time", Math.round(new Date().getTime() / 1000).toString());
+  tx.addTag("Content-Type", "application/json");
+  tx.addTag("Helper", VERSION);
+
+  // Push triggered from gitopia mirror action
+  if (process.env.GITHUB_SHA) {
+    tx.addTag("Origin", "gitopia-mirror-action");
+  } else {
+    tx.addTag("Origin", "git-remote-gitopia");
+  }
+
+  const bundledDataTxIds = bundledDataTxInfo.map(
+    (bundledDataTx) => bundledDataTx.id
+  );
+  tx.addTag("Reference-Txs", JSON.stringify(bundledDataTxIds));
+
+  await arweave.transactions.sign(tx, wallet);
+  return tx;
 }
 
 export const makeDataItem = async (
@@ -77,15 +101,8 @@ export const makeDataItem = async (
   return await arData.sign(item, wallet);
 };
 
-export const postBundledTransaction = async (
-  arweave,
-  arData,
-  wallet,
-  remoteURI,
-  dataItems
-) => {
+export const makeBundledDataTx = async (wallet, remoteURI, bundle) => {
   const { repoName } = parseArgitRemoteURI(remoteURI);
-  const bundle = await arData.bundleData(dataItems);
   const data = JSON.stringify(bundle);
   const tx = await arweave.createTransaction({ data }, wallet);
   tx.addTag("Repo", repoName);
@@ -95,17 +112,13 @@ export const postBundledTransaction = async (
   tx.addTag("Bundle-Format", "json");
   tx.addTag("Bundle-Version", "1.0.0");
   tx.addTag("Content-Type", "application/json");
-  tx.addTag("Helper", VERSION);
   tx.addTag("Unix-Time", Math.round(new Date().getTime() / 1000).toString());
 
-  // Push triggered from gitopia mirror action
-  if (process.env.GITHUB_SHA) {
-    tx.addTag("Origin", "gitopia-mirror-action");
-  } else {
-    tx.addTag("Origin", "git-remote-gitopia");
-  }
-
   await arweave.transactions.sign(tx, wallet);
+  return tx;
+};
+
+export const postTransaction = async (tx) => {
   const uploader = await arweave.transactions.getUploader(tx);
 
   const bar = newProgressBar();
@@ -117,8 +130,57 @@ export const postBundledTransaction = async (
   }
 
   bar.stop();
+};
 
-  // Send fee to PST holders
+export const waitTxPropogation = async (tx) => {
+  let status = await getStatus(tx.id);
+
+  let wait = 6;
+  while (status === 404 && wait--) {
+    await sleep(5000);
+    try {
+      status = await getStatus(tx.id);
+    } catch (err) {
+      wait++;
+      status = 404;
+    }
+  }
+
+  if (status === 400 || status === 404 || status === 410) {
+    return status;
+  }
+
+  if (status === 202) {
+    return 202;
+  }
+
+  // we'll give it 2 minutes for propogation
+  if (status === 404) {
+    let tries = 3;
+    do {
+      await sleep(40000); //40 secs
+      try {
+        status = await getStatus(tx.id);
+      } catch (err) {
+        tries++;
+        status = 404;
+      }
+      if (status === 200) {
+        return 200;
+      }
+    } while (--tries);
+  }
+
+  return 404;
+};
+
+export const sendPSTFee = async (
+  wallet,
+  remoteURI,
+  transactionsInfo,
+  referenceId
+) => {
+  const { repoName } = parseArgitRemoteURI(remoteURI);
   const contractState = await smartweave.default.readContract(
     arweave,
     contractId
@@ -128,8 +190,13 @@ export const postBundledTransaction = async (
   );
 
   // PST Fee
-  const txFee = new BigNumber(tx.reward);
-  const pstFee = txFee.multipliedBy(0.1);
+  let totalTxFee = new BigNumber(0);
+  for (let i = 0; i < transactionsInfo.length; i++) {
+    const txFee = new BigNumber(transactionsInfo[i].reward);
+    totalTxFee = totalTxFee.plus(txFee);
+  }
+
+  const pstFee = totalTxFee.multipliedBy(0.1);
 
   const quantity = pstFee.isGreaterThan(
     BigNumber(arweave.ar.arToWinston("0.01"))
@@ -141,7 +208,7 @@ export const postBundledTransaction = async (
     { target: holder, quantity },
     wallet
   );
-  pstTx.addTag("Bundle-Txid", tx.id);
+  pstTx.addTag("Reference-Id", referenceId);
   pstTx.addTag("Repo", repoName);
   pstTx.addTag("Version", "0.0.2");
   pstTx.addTag("App-Name", "Gitopia");

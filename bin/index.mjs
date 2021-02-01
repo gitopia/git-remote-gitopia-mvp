@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env -S node --max-old-space-size=16384
 import axios from "axios";
 import Helper, { VERSION } from "./helper.js";
 
