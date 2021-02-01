@@ -1,3 +1,4 @@
+import Arweave from "arweave";
 import * as smartweave from "smartweave";
 import shell from "shelljs";
 import pkg from "bignumber.js";
@@ -6,13 +7,21 @@ const { BigNumber } = pkg;
 import { VERSION } from "../helper.js";
 import { newProgressBar } from "./util.js";
 
+export const arweave = Arweave.init({
+  host: "arweave.net", // Arweave Gateway
+  //host: 'arweave.dev', // Arweave Dev Gateway
+  port: 443,
+  protocol: "https",
+  timeout: 600000,
+});
+
 // prettier-ignore
 const argitRemoteURIRegex = '^gitopia:\/\/([a-zA-Z0-9-_]{43})\/([A-Za-z0-9_.-]*)'
 const contractId = "1ljLAR55OhtenU0iDWkLGT6jF4ApxeQd5P0gXNyNJXg";
 
 const sleep = async (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const getStatus = async (arweave, txid) =>
+const getStatus = async (txid) =>
   (await arweave.transactions.getStatus(txid)).status;
 
 export function parseArgitRemoteURI(remoteURI) {
@@ -24,7 +33,6 @@ export function parseArgitRemoteURI(remoteURI) {
 }
 
 export async function makeUpdateRefTx(
-  arweave,
   wallet,
   remoteURI,
   ref,
@@ -93,7 +101,7 @@ export const makeDataItem = async (
   return await arData.sign(item, wallet);
 };
 
-export const makeBundledDataTx = async (arweave, wallet, remoteURI, bundle) => {
+export const makeBundledDataTx = async (wallet, remoteURI, bundle) => {
   const { repoName } = parseArgitRemoteURI(remoteURI);
   const data = JSON.stringify(bundle);
   const tx = await arweave.createTransaction({ data }, wallet);
@@ -110,7 +118,7 @@ export const makeBundledDataTx = async (arweave, wallet, remoteURI, bundle) => {
   return tx;
 };
 
-export const postTransaction = async (arweave, tx) => {
+export const postTransaction = async (tx) => {
   const uploader = await arweave.transactions.getUploader(tx);
 
   const bar = newProgressBar();
@@ -124,14 +132,14 @@ export const postTransaction = async (arweave, tx) => {
   bar.stop();
 };
 
-export const waitTxPropogation = async (arweave, tx) => {
-  let status = await getStatus(arweave, tx.id);
+export const waitTxPropogation = async (tx) => {
+  let status = await getStatus(tx.id);
 
   let wait = 6;
   while (status === 404 && wait--) {
     await sleep(5000);
     try {
-      status = await getStatus(arweave, tx.id);
+      status = await getStatus(tx.id);
     } catch (err) {
       wait++;
       status = 404;
@@ -152,7 +160,7 @@ export const waitTxPropogation = async (arweave, tx) => {
     do {
       await sleep(40000); //40 secs
       try {
-        status = await getStatus(arweave, tx.id);
+        status = await getStatus(tx.id);
       } catch (err) {
         tries++;
         status = 404;
@@ -167,7 +175,6 @@ export const waitTxPropogation = async (arweave, tx) => {
 };
 
 export const sendPSTFee = async (
-  arweave,
   wallet,
   remoteURI,
   transactionsInfo,
@@ -197,22 +204,16 @@ export const sendPSTFee = async (
     ? pstFee.toFixed(0)
     : arweave.ar.arToWinston("0.01");
 
-  let pstTx = null;
-  do {
-    pstTx = await arweave.createTransaction(
-      { target: holder, quantity },
-      wallet
-    );
-    pstTx.addTag("Reference-Id", referenceId);
-    pstTx.addTag("Repo", repoName);
-    pstTx.addTag("Version", "0.0.2");
-    pstTx.addTag("App-Name", "Gitopia");
-    pstTx.addTag(
-      "Unix-Time",
-      Math.round(new Date().getTime() / 1000).toString()
-    );
+  const pstTx = await arweave.createTransaction(
+    { target: holder, quantity },
+    wallet
+  );
+  pstTx.addTag("Reference-Id", referenceId);
+  pstTx.addTag("Repo", repoName);
+  pstTx.addTag("Version", "0.0.2");
+  pstTx.addTag("App-Name", "Gitopia");
+  pstTx.addTag("Unix-Time", Math.round(new Date().getTime() / 1000).toString());
 
-    await arweave.transactions.sign(pstTx, wallet);
-    await arweave.transactions.post(pstTx);
-  } while ((await waitTxPropogation(arweave, pstTx)) !== 202);
+  await arweave.transactions.sign(pstTx, wallet);
+  await arweave.transactions.post(pstTx);
 };

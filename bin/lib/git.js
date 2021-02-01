@@ -30,11 +30,7 @@ export default class GitHelper {
 
     if (await this.exists(oid)) return;
 
-    const objects = await fetchGitObjects(
-      this.helper._arweave,
-      this.helper.ArData,
-      this.helper.url
-    );
+    const objects = await fetchGitObjects(this.helper.ArData, this.helper.url);
 
     for (const object of objects) {
       dumps.push(this.dump(object.oid, object.data));

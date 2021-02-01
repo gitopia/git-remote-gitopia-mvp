@@ -7,12 +7,12 @@ import GitHelper from "./lib/git.js";
 import LineHelper from "./lib/line.js";
 import Arweave from "arweave";
 import {
+  arweave,
   makeDataItem,
   makeUpdateRefTx,
   parseArgitRemoteURI,
   makeBundledDataTx,
   postTransaction,
-  waitTxPropogation,
   sendPSTFee,
 } from "./lib/arweave.js";
 import { getAllRefs } from "./lib/graphql.js";
@@ -23,7 +23,7 @@ import ArweaveBundles from "arweave-bundles";
 
 export const VERSION = "0.1.8";
 
-const CHUNK_SIZE = 128 * 1024 * 1024; // 128Mb
+const CHUNK_SIZE = 100 * 1024; // 128Mb
 
 const _timeout = async (duration) => {
   return new Promise((resolve, reject) => {
@@ -75,11 +75,7 @@ export default class Helper {
     // create dirs
     // fs.ensureDirSync(path.join(this.path, "refs", "remotes", this.name));
     // fs.ensureDirSync(path.join(this.path, "dgit", "refs"));
-    this._arweave = Arweave.init({
-      host: "arweave.net",
-      port: 443,
-      protocol: "https",
-    });
+
     const deps = {
       utils: Arweave.utils,
       crypto: Arweave.crypto,
@@ -207,7 +203,7 @@ export default class Helper {
     const spinner = ora("Fetching remote refs from Gitopia").start();
 
     try {
-      const refs = await getAllRefs(this._arweave, this.url);
+      const refs = await getAllRefs(this.url);
 
       spinner.succeed("Remote refs fetched from Gitopia");
       return refs;
@@ -288,7 +284,7 @@ export default class Helper {
         try {
           spinner = ora(`Checking permissions over ${this.address}`).start();
           // check push permission for repo
-          const address = await this._arweave.wallets.jwkToAddress(this.wallet);
+          const address = await arweave.wallets.jwkToAddress(this.wallet);
           const { repoOwnerAddress } = parseArgitRemoteURI(this.url);
 
           if (address === repoOwnerAddress) {
@@ -365,46 +361,31 @@ export default class Helper {
 
           // Git object bundles
           for (let i = 0; i < bundledDatas.length; i++) {
-            let bundledDataTx = null;
-
-            do {
-              bundledDataTx = await makeBundledDataTx(
-                this._arweave,
-                this.wallet,
-                this.url,
-                bundledDatas[i]
-              );
-              bundledDataTxInfo.push({
-                id: bundledDataTx.id,
-                reward: bundledDataTx.reward,
-              });
-
-              await postTransaction(this._arweave, bundledDataTx);
-            } while (
-              (await waitTxPropogation(this._arweave, bundledDataTx)) !== 202
+            let bundledDataTx = await makeBundledDataTx(
+              this.wallet,
+              this.url,
+              bundledDatas[i]
             );
+            bundledDataTxInfo.push({
+              id: bundledDataTx.id,
+              reward: bundledDataTx.reward,
+            });
+
+            await postTransaction(bundledDataTx);
           }
 
           // update ref
-          let updateRefTx = null;
-          do {
-            updateRefTx = await makeUpdateRefTx(
-              this._arweave,
-              this.wallet,
-              this.url,
-              dst,
-              srcOid,
-              bundledDataTxInfo
-            );
-
-            await postTransaction(this._arweave, updateRefTx);
-          } while (
-            (await waitTxPropogation(this._arweave, updateRefTx)) !== 202
+          const updateRefTx = await makeUpdateRefTx(
+            this.wallet,
+            this.url,
+            dst,
+            srcOid,
+            bundledDataTxInfo
           );
+          await postTransaction(updateRefTx);
 
           // PST Fee
           await sendPSTFee(
-            this._arweave,
             this.wallet,
             this.url,
             bundledDataTxInfo,
