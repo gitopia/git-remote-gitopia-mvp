@@ -119,34 +119,34 @@ export const postBundledTransaction = async (
   bar.stop();
 
   // Send fee to PST holders
-  const contractState = await smartweave.default.readContract(
-    arweave,
-    contractId
-  );
-  const holder = smartweave.default.selectWeightedPstHolder(
-    contractState.balances
-  );
+  // const contractState = await smartweave.default.readContract(
+  //   arweave,
+  //   contractId
+  // );
+  // const holder = smartweave.default.selectWeightedPstHolder(
+  //   contractState.balances
+  // );
 
   // PST Fee
-  const txFee = new BigNumber(tx.reward);
-  const pstFee = txFee.multipliedBy(0.1);
+  // const txFee = new BigNumber(tx.reward);
+  // const pstFee = txFee.multipliedBy(0.1);
 
-  const quantity = pstFee.isGreaterThan(
-    BigNumber(arweave.ar.arToWinston("0.01"))
-  )
-    ? pstFee.toFixed(0)
-    : arweave.ar.arToWinston("0.01");
+  // const quantity = pstFee.isGreaterThan(
+  //   BigNumber(arweave.ar.arToWinston("0.01"))
+  // )
+  //   ? pstFee.toFixed(0)
+  //   : arweave.ar.arToWinston("0.01");
 
-  const pstTx = await arweave.createTransaction(
-    { target: holder, quantity },
-    wallet
-  );
-  pstTx.addTag("Bundle-Txid", tx.id);
-  pstTx.addTag("Repo", repoName);
-  pstTx.addTag("Version", "0.0.2");
-  pstTx.addTag("App-Name", "Gitopia");
-  pstTx.addTag("Unix-Time", Math.round(new Date().getTime() / 1000).toString());
+  // const pstTx = await arweave.createTransaction(
+  //   { target: holder, quantity },
+  //   wallet
+  // );
+  // pstTx.addTag("Bundle-Txid", tx.id);
+  // pstTx.addTag("Repo", repoName);
+  // pstTx.addTag("Version", "0.0.2");
+  // pstTx.addTag("App-Name", "Gitopia");
+  // pstTx.addTag("Unix-Time", Math.round(new Date().getTime() / 1000).toString());
 
-  await arweave.transactions.sign(pstTx, wallet);
-  await arweave.transactions.post(pstTx);
+  // await arweave.transactions.sign(pstTx, wallet);
+  // await arweave.transactions.post(pstTx);
 };
